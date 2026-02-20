@@ -27,14 +27,6 @@
             ENTRY
             EXPORT  Reset_Handler
             IMPORT  Startup
-	    EXPORT  PutChar
-	    IMPORT  Carry
-	    IMPORT  Negative
-	    IMPORT  Overflow
-	    IMPORT  PutPrompt
-	    IMPORT  Zero
-
-
 Reset_Handler  PROC  {}
 main
 ;---------------------------------------------------------------
@@ -44,178 +36,117 @@ main
             BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
-        BL      Init_UART0_Polling
+;---------------------------------------------------------------
+;Mask interrupts
+            CPSID   I
+;KL05 system startup
+            BL      Startup
 
-MainLoop
-        ; Print prompt
-        BL      PutPrompt
+main_loop
+;Initialize UART0
+            BL      Init_UART0_Polling
 
-ReadChar
-        ; Read a character from UART0
-        BL      GetChar
-        MOVS    R1, R0               ; Save original char for echoing
+menu_loop
+;Display prompt
+            BL      PutPrompt
 
-        ; Convert lowercase 'a'-'z' to uppercase
-        CMP     R0, #'a'
-        BLT     CheckCmd
-        CMP     R0, #'z'
-        BGT     CheckCmd
-        SUBS    R0, R0, #32          ; Convert to uppercase
+;Read a character from terminal
+            BL      GetChar       ; returns character in R0
 
-CheckCmd
-        ; Compare to commands: C, N, V, Z
-        CMP     R0, #'C'
-        BEQ     DoC
-        CMP     R0, #'N'
-        BEQ     DoN
-        CMP     R0, #'V'
-        BEQ     DoV
-        CMP     R0, #'Z'
-        BEQ     DoZ
+;Check if lowercase and convert to uppercase
+            MOV     R1, R0
+            CMP     R0, #'a'
+            BLT     skip_upper
+            CMP     R0, #'z'
+            BGT     skip_upper
+            SUB     R1, R1, #32  ; convert to uppercase
 
-        ; Not a valid command, read another char
-        B       ReadChar
+skip_upper
+;Check if R1 = 'C','N','V','Z'
+            CMP     R1, #'C'
+            BEQ     do_C
+            CMP     R1, #'N'
+            BEQ     do_N
+            CMP     R1, #'V'
+            BEQ     do_V
+            CMP     R1, #'Z'
+            BEQ     do_Z
+;If invalid command, loop back
+            B       menu_loop
 
-DoC
-        ; Echo character, call Carry subroutine
-        MOVS    R0, R1
-        BL      PutChar
-        BL      Carry
-        B       MainLoop
+;---------------------------------------------------------------
+do_C
+;Echo original character
+            MOV     R0, R0
+            BL      PutChar
+;Call Carry subroutine
+            BL      Carry
+            B       menu_loop
 
-DoN
-        MOVS    R0, R1
-        BL      PutChar
-        BL      Negative
-        B       MainLoop
+do_N
+            MOV     R0, R0
+            BL      PutChar
+            BL      Negative
+            B       menu_loop
 
-DoV
-        MOVS    R0, R1
-        BL      PutChar
-        BL      Overflow
-        B       MainLoop
+do_V
+            MOV     R0, R0
+            BL      PutChar
+            BL      Overflow
+            B       menu_loop
 
-DoZ
-        MOVS    R0, R1
-        BL      PutChar
-        BL      Zero
-        B       MainLoop
-
-        ; Infinite loop to stay here if needed
-        B       .
-
-        ENDP
+do_Z
+            MOV     R0, R0
+            BL      PutChar
+            BL      Zero
+            B       menu_loop
+;>>>>>   end main program code <<<<<
+;Stay here
+            B       .
+            ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-;;>>>>> begin subroutine code <<<<<
+;---------------------------------------------------------------
+;UART0 Initialization Subroutine
+;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
+Init_UART0_Polling  PROC
+            PUSH    {R4-R5}          ; save temp registers
 
-;---------------------------------------
-; Init_UART0_Polling
-; Initializes UART0 for 9600 baud, 8N1, polling mode
-;---------------------------------------
-Init_UART0_Polling
-        PUSH    {R1-R3, LR}
+;Enable clock for UART0 and PortB
+            LDR     R4, =SIM_SCGC4
+            LDR     R5, [R4]
+            ORR     R5, R5, #(1<<10) ; enable UART0 clock
+            STR     R5, [R4]
 
-        ; Enable PORTB clock (SIM_SCGC5)
-        LDR     R0, =0x40048038       ; SIM_SCGC5
-        LDR     R1, [R0]
-        MOVS    R2, #1
-        LSL     R2, #10               ; PORTB
-        ORR     R1, R1, R2
-        STR     R1, [R0]
+            LDR     R4, =SIM_SCGC5
+            LDR     R5, [R4]
+            ORR     R5, R5, #(1<<10) ; enable Port B clock
+            STR     R5, [R4]
 
-        ; Enable UART0 clock (SIM_SCGC4)
-        LDR     R0, =0x4004803C       ; SIM_SCGC4
-        LDR     R1, [R0]
-        MOVS    R2, #1
-        LSL     R2, #10               ; UART0
-        ORR     R1, R1, R2
-        STR     R1, [R0]
+;Configure PTB1=TX, PTB2=RX for UART function
+            LDR     R4, =PORTB_PCR1
+            MOV     R5, #(2<<8)       ; MUX = 2 for UART
+            STR     R5, [R4]
+            LDR     R4, =PORTB_PCR2
+            STR     R5, [R4]
 
-        ; Configure PORTB pins for UART0
-        LDR     R0, =0x4004A008       ; PORTB_PCR2 (RX)
-        MOVS    R1, #0x102
-        STR     R1, [R0]
+;Set baud rate = 9600
+;Assume 48MHz system clock, oversampling = 16
+;UART0_BDH, UART0_BDL
+            LDR     R4, =UART0_BDH
+            MOV     R5, #0            ; MSB of SBR
+            STRB    R5, [R4]
+            LDR     R4, =UART0_BDL
+            MOV     R5, #31           ; LSB of SBR ~ 312 / 0x138
+            STRB    R5, [R4]
 
-        LDR     R0, =0x4004A004       ; PORTB_PCR1 (TX)
-        MOVS    R1, #0x102
-        STR     R1, [R0]
+;Enable transmitter and receiver
+            LDR     R4, =UART0_C2
+            MOV     R5, #(1<<2)|(1<<3)  ; RE | TE
+            STRB    R5, [R4]
 
-        ; UART0 base
-        LDR     R0, =0x4006A000
-
-        ; Disable UART0 transmitter and receiver
-        LDRB    R1, [R0,#0x03]        ; C2
-        MOVS    R2, #0x0C              ; TE|RE
-        BIC     R1, R1, R2
-        STRB    R1, [R0,#0x03]
-
-        ; Set baud rate for 9600 (BDH = 0x01, BDL = 0x38)
-        MOVS    R1, #0x01
-        STRB    R1, [R0,#0x00]        ; BDH
-        MOVS    R1, #0x38
-        STRB    R1, [R0,#0x01]        ; BDL
-
-        ; 8N1 (default)
-        MOVS    R1, #0x00
-        STRB    R1, [R0,#0x02]        ; C1
-        STRB    R1, [R0,#0x06]        ; C3
-        MOVS    R1, #0x0F
-        STRB    R1, [R0,#0x0A]        ; C4
-        STRB    R1, [R0,#0x0B]        ; C5
-
-        ; Clear status flags
-        MOVS    R1, #0x1F
-        STRB    R1, [R0,#0x04]        ; S1
-        MOVS    R1, #0xC0
-        STRB    R1, [R0,#0x05]        ; S2
-
-        ; Enable UART0 transmitter and receiver
-        MOVS    R1, #0x0C
-        STRB    R1, [R0,#0x03]        ; C2
-
-        POP     {R1-R3, PC}
-
-;---------------------------------------
-; PutChar
-; Sends a single character via UART0 (polling)
-; Input: R0 = character to send
-;---------------------------------------
-PutChar
-        PUSH    {R1, LR}
-
-WAIT_TX:
-        LDR     R1, =0x4006A004       ; UART0_S1
-        LDRB    R2, [R1]
-        MOVS    R3, #0x80              ; TDRE
-        ANDS    R2, R2, R3
-        BEQ     WAIT_TX
-
-        LDR     R1, =0x4006A007       ; UART0_D
-        STRB    R0, [R1]
-
-        POP     {R1, PC}
-
-;---------------------------------------
-; GetChar
-; Receives a single character via UART0 (polling)
-; Output: R0 = received character
-;---------------------------------------
-GetChar
-        PUSH    {R1, LR}
-
-WAIT_RX:
-        LDR     R1, =0x4006A004       ; UART0_S1
-        LDRB    R2, [R1]
-        MOVS    R3, #0x20              ; RDRF
-        ANDS    R2, R2, R3
-        BEQ     WAIT_RX
-
-        LDR     R1, =0x4006A007       ; UART0_D
-        LDRB    R0, [R1]
-
-        POP     {R1, PC}
-
-;>>>>>   end subroutine code <<<<<
+            POP     {R4-R5}
+            BX      LR
+            ENDP
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
