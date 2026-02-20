@@ -111,86 +111,139 @@ do_Z
 ;Stay here
             B       .
             ENDP    ;main
-Init_UART0_Polling PROC
-    PUSH {R4-R7}
+;---------------------------------------------------------------
+; Init_UART0_Polling
+; Initializes UART0 for polled serial I/O
+; 9600 baud, 8N1, PTB1=TX, PTB2=RX
+; Input : none
+; Output: none
+; Registers modified: LR, PC, PSR only
+;---------------------------------------------------------------
+Init_UART0_Polling  PROC
+    PUSH {R0-R7}                 ; preserve all working regs
 
-;--------------------------------------
-; Select MCGFLLCLK as UART0 clock source
-;--------------------------------------
-    LDR R4, =SIM_SOPT2
-    LDR R5, [R4]
-    LDR R6, =SIM_SOPT2_UART0SRC_MASK
-    BICS R5, R5, R6
-    LDR R6, =SIM_SOPT2_UART0SRC_MCGFLLCLK
-    ORRS R5, R5, R6
-    STR R5, [R4]
+    ; Select MCGFLLCLK as UART0 clock source
+    LDR  R0, =SIM_SOPT2
+    LDR  R1, [R0]
+    BIC  R1, R1, #SIM_SOPT2_UART0SRC_MASK
+    ORR  R1, R1, #SIM_SOPT2_UART0SRC_MCGFLLCLK
+    STR  R1, [R0]
 
-;--------------------------------------
-; Enable clocks
-;--------------------------------------
-    ; UART0 clock
-    LDR R4, =SIM_SCGC4
-    LDR R5, [R4]
-    LDR R6, =SIM_SCGC4_UART0_MASK
-    ORRS R5, R5, R6
-    STR R5, [R4]
+    ; Set UART0 for external connection
+    LDR  R0, =SIM_SOPT5
+    LDR  R1, [R0]
+    BIC  R1, R1, #SIM_SOPT5_UART0_EXTERN_MASK_CLEAR
+    STR  R1, [R0]
 
-    ; Port B clock
-    LDR R4, =SIM_SCGC5
-    LDR R5, [R4]
-    LDR R6, =SIM_SCGC5_PORTB_MASK
-    ORRS R5, R5, R6
-    STR R5, [R4]
+    ; Enable UART0 clock
+    LDR  R0, =SIM_SCGC4
+    LDR  R1, [R0]
+    ORR  R1, R1, #SIM_SCGC4_UART0_MASK
+    STR  R1, [R0]
 
-;--------------------------------------
-; PTB1 = TX, PTB2 = RX (MUX=2)
-;--------------------------------------
-    LDR R4, =PORTB_PCR1
-    LDR R5, =PORT_PCR_SET_PTB1_UART0_TX
-    STR R5, [R4]
+    ; Enable PORTB clock
+    LDR  R0, =SIM_SCGC5
+    LDR  R1, [R0]
+    ORR  R1, R1, #SIM_SCGC5_PORTB_MASK
+    STR  R1, [R0]
 
-    LDR R4, =PORTB_PCR2
-    LDR R5, =PORT_PCR_SET_PTB2_UART0_RX
-    STR R5, [R4]
+    ; PTB2 = UART0_RX
+    LDR  R0, =PORTB_PCR2
+    LDR  R1, =PORT_PCR_SET_PTB2_UART0_RX
+    STR  R1, [R0]
 
-;--------------------------------------
-; Disable UART before config
-;--------------------------------------
-    LDR R4, =UART0_C2
-    LDRB R5, [R4]
-    MOVS R6, #(1<<2)|(1<<3)   ; RE|TE
-    BICS R5, R5, R6
-    STRB R5, [R4]
+    ; PTB1 = UART0_TX
+    LDR  R0, =PORTB_PCR1
+    LDR  R1, =PORT_PCR_SET_PTB1_UART0_TX
+    STR  R1, [R0]
 
-;--------------------------------------
-; Baud = 9600, 8N1, OSR=16
-;--------------------------------------
-    LDR R4, =UART0_BDH
-    MOVS R5, #0x01
-    STRB R5, [R4]
+    ; Disable UART0
+    LDR  R0, =UART0_BASE
+    LDRB R1, [R0,#UART0_C2_OFFSET]
+    BIC  R1, R1, #UART0_C2_T_R
+    STRB R1, [R0,#UART0_C2_OFFSET]
 
-    LDR R4, =UART0_BDL
-    MOVS R5, #0x38
-    STRB R5, [R4]
+    ; Configure 9600 baud, 8N1
+    MOVS R1,#UART0_BDH_9600
+    STRB R1,[R0,#UART0_BDH_OFFSET]
 
-    LDR R4, =UART0_C1
-    MOVS R5, #0x00        ; 8N1
-    STRB R5, [R4]
+    MOVS R1,#UART0_BDL_9600
+    STRB R1,[R0,#UART0_BDL_OFFSET]
 
-    LDR R4, =UART0_C4
-    MOVS R5, #0x0F        ; OSR=16
-    STRB R5, [R4]
+    MOVS R1,#UART0_C1_8N1
+    STRB R1,[R0,#UART0_C1_OFFSET]
 
-;--------------------------------------
-; Enable UART RX + TX
-;--------------------------------------
-    LDR R4, =UART0_C2
-    MOVS R5, #(1<<2)|(1<<3)
-    STRB R5, [R4]
+    MOVS R1,#UART0_C3_NO_TXINV
+    STRB R1,[R0,#UART0_C3_OFFSET]
 
-    POP {R4-R7}
-    BX LR
-ENDP
+    MOVS R1,#UART0_C4_NO_MATCH_OSR_16
+    STRB R1,[R0,#UART0_C4_OFFSET]
+
+    MOVS R1,#UART0_C5_NO_DMA_SSR_SYNC
+    STRB R1,[R0,#UART0_C5_OFFSET]
+
+    MOVS R1,#UART0_S1_CLEAR_FLAGS
+    STRB R1,[R0,#UART0_S1_OFFSET]
+
+    MOVS R1,#UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
+    STRB R1,[R0,#UART0_S2_OFFSET]
+
+    ; Enable UART0 RX + TX
+    MOVS R1,#UART0_C2_T_R
+    STRB R1,[R0,#UART0_C2_OFFSET]
+
+    POP {R0-R7}
+    BX  LR
+    ENDP
+
+;---------------------------------------------------------------
+; PutChar
+; Sends character in R0 via UART0 (polled)
+; Input : R0 = character (ASCII)
+; Output: none
+; Registers modified: LR, PC, PSR only
+;---------------------------------------------------------------
+PutChar PROC
+    PUSH {R1-R3}
+
+    LDR  R1, =UART0_BASE
+    MOVS R2, #UART0_S1_TDRE_MASK
+
+Wait_Tx:
+    LDRB R3, [R1,#UART0_S1_OFFSET]
+    ANDS R3, R3, R2
+    BEQ  Wait_Tx
+
+    STRB R0, [R1,#UART0_D_OFFSET]
+
+    POP {R1-R3}
+    BX  LR
+    ENDP
+
+;---------------------------------------------------------------
+; GetChar
+; Receives character from UART0 (polled)
+; Input : none
+; Output: R0 = character (ASCII)
+; Registers modified: R0, LR, PC, PSR
+;---------------------------------------------------------------
+GetChar PROC
+    PUSH {R1-R3}
+
+    LDR  R1, =UART0_BASE
+    MOVS R2, #UART0_S1_RDRF_MASK
+
+Wait_Rx:
+    LDRB R3, [R1,#UART0_S1_OFFSET]
+    ANDS R3, R3, R2
+    BEQ  Wait_Rx
+
+    LDRB R0, [R1,#UART0_D_OFFSET]
+
+    POP {R1-R3}
+    BX  LR
+    ENDP
+	
             ALIGN
 ;****************************************************************
 ;Vector Table Mapped to Address 0 at Reset
