@@ -179,21 +179,21 @@ Init_UART0_Polling  PROC
 ; Output: none
 ; Registers modified: LR, PC, PSR only
 ;---------------------------------------------------------------
-PutChar PROC
-    PUSH {R1-R2}
+PutChar         PROC
+                PUSH {R1-R3, LR}
 
-Wait_Tx:
-    LDR     R1, =UART0_S1
-    LDRB    R2, [R1]
-    TST     R2, #0x80        ; TDRE bit 7
-    BEQ     Wait_Tx
+                LDR  R1, =UART0_BASE
 
-    LDR     R1, =UART0_D
-    STRB    R0, [R1]
+PollTx          
+                LDRB R3, [R1, #UART0_S1_OFFSET]     ; read status
+                MOVS R2, #UART0_S1_TDRE_MASK        ; mask
+                ANDS R3, R3, R2
+                BEQ  PollTx                         ; wait until TDRE=1
 
-    POP {R1-R2}
-    BX  LR
-    ENDP
+                STRB R0, [R1, #UART0_D_OFFSET]      ; write data
+
+                POP  {R1-R3, PC}
+                ENDP
 
 ;---------------------------------------------------------------
 ; GetChar
@@ -201,21 +201,21 @@ Wait_Tx:
 ; Output: R0 = ASCII char
 ; Registers modified: R0, LR, PC, PSR
 ;---------------------------------------------------------------
-GetChar PROC
-    PUSH {R1-R2}
+GetChar         PROC
+                PUSH {R1-R3, LR}
 
-Wait_Rx:
-    LDR     R1, =UART0_S1
-    LDRB    R2, [R1]
-    TST     R2, #0x20        ; RDRF bit 5
-    BEQ     Wait_Rx
+                LDR  R1, =UART0_BASE
 
-    LDR     R1, =UART0_D
-    LDRB    R0, [R1]
+PollRx          
+                LDRB R3, [R1, #UART0_S1_OFFSET]     ; read status
+                MOVS R2, #UART0_S1_RDRF_MASK        ; mask
+                ANDS R3, R3, R2
+                BEQ  PollRx                         ; wait until RDRF=1
 
-    POP {R1-R2}
-    BX  LR
-    ENDP
+                LDRB R0, [R1, #UART0_D_OFFSET]      ; read data into R0
+
+                POP  {R1-R3, PC}
+                ENDP
 	
             ALIGN
 ;****************************************************************
