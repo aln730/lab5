@@ -1,8 +1,8 @@
             TTL Program Title for Listing Header Goes Here
 ;****************************************************************
 ;Descriptive comment header goes here.
-;(What does the program do?)
-;Name:  <Your name here>
+; Implements a polled UART0 menu to display APSR flags C, N, V, Z
+;Name:  Arnav Gawas
 ;Date:  <Date completed here>
 ;Class:  CMPE-250
 ;Section:  <Your lab section, day, and time here>
@@ -13,11 +13,11 @@
 ;****************************************************************
 ;Assembler directives
             THUMB
-            OPT    64  ;Turn on listing macro expansions
+            OPT    64              ; Turn on listing macro expansions
 ;****************************************************************
 ;Include files
-            GET  MKL05Z4.s     ;Included by start.s
-            OPT  1   ;Turn on listing
+            GET    MKL05Z4.s       ; Included by start.s
+            OPT    1               ; Turn on listing
 ;****************************************************************
 ;EQUates
 ;****************************************************************
@@ -27,162 +27,164 @@
             ENTRY
             EXPORT  Reset_Handler
             IMPORT  Startup
-	    EXPORT  PutChar
-	    IMPORT  Carry
-	    IMPORT  Negative
-	    IMPORT  Overflow
-	    IMPORT  PutPrompt
-	    IMPORT  Zero
+            EXPORT  PutChar
+            IMPORT  Carry
+            IMPORT  Negative
+            IMPORT  Overflow
+            IMPORT  PutPrompt
+            IMPORT  Zero
+            IMPORT  GetChar
 
-
-Reset_Handler  PROC  {}
-main
 ;---------------------------------------------------------------
-;Mask interrupts
+Reset_Handler  PROC
+;---------------------------------------------------------------
+; Mask interrupts
             CPSID   I
-;KL05 system startup with 48-MHz system clock
+; KL05 system startup with 48-MHz system clock
             BL      Startup
-;---------------------------------------------------------------
-;>>>>> begin main program code <<<<<
-BL      Init_UART0_Polling     ; initialize UART0
+
+; Initialize UART0 for polled I/O
+            BL      Init_UART0_Polling
 
 MainLoop
-        BL      PutPrompt             
-ReadChar
-        BL      GetChar               ; R0 = input char
-        MOV     R1, R0                ; save original char
+; Display prompt
+            BL      PutPrompt
 
-        ; check lowercase a-z
-        CMP     R0, #'a'
-        BLT     CheckCmd
-        CMP     R0, #'z'
-        BGT     CheckCmd
-        SUB     R0, R0, #32            ; convert to uppercase
+; Read one character from terminal
+            BL      GetChar
+            MOV     R4, R0        ; Save original char in R4
+            MOV     R1, R0        ; Copy for uppercase conversion
 
-CheckCmd
-        CMP     R0, #'C'
-        BEQ     DoC
-        CMP     R0, #'N'
-        BEQ     DoN
-        CMP     R0, #'V'
-        BEQ     DoV
-        CMP     R0, #'Z'
-        BEQ     DoZ
+; Convert lowercase to uppercase if needed
+            CMP     R1, #'a'
+            BLT     SkipUpperConvert
+            CMP     R1, #'z'
+            BGT     SkipUpperConvert
+            SUB     R1, R1, #32  ; Convert to uppercase
+SkipUpperConvert
 
-        B       ReadChar              
+; Check command characters
+            CMP     R1, #'C'
+            BEQ     CallCarry
+            CMP     R1, #'N'
+            BEQ     CallNegative
+            CMP     R1, #'V'
+            BEQ     CallOverflow
+            CMP     R1, #'Z'
+            BEQ     CallZero
 
-DoC
-        MOV     R0, R1
-        BL      PutChar
-        BL      Carry
-        B       MainLoop
+; Invalid character, loop back
+            B       MainLoop
 
-DoN
-        MOV     R0, R1
-        BL      PutChar
-        BL      Negative
-        B       MainLoop
+;---------------------------------------
+CallCarry
+            MOV     R0, R4
+            BL      PutChar
+            BL      Carry
+            B       MainLoop
 
-DoV
-        MOV     R0, R1
-        BL      PutChar
-        BL      Overflow
-        B       MainLoop
+CallNegative
+            MOV     R0, R4
+            BL      PutChar
+            BL      Negative
+            B       MainLoop
 
-DoZ
-        MOV     R0, R1
-        BL      PutChar
-        BL      Zero
-        B       MainLoop
+CallOverflow
+            MOV     R0, R4
+            BL      PutChar
+            BL      Overflow
+            B       MainLoop
 
-;>>>>>   end main program code <<<<<
-;Stay here
+CallZero
+            MOV     R0, R4
+            BL      PutChar
+            BL      Zero
+            B       MainLoop
+
+; Stay here (should never exit)
             B       .
-            ENDP    ;main
-;>>>>> begin subroutine code <<<<<
-Init_UART0_Polling
-        PUSH    {R1-R7, LR}
+            ENDP
 
-        LDR     R1, =0x40048038        ; SIM_SCGC5
-        LDR     R2, [R1]
-        ORR     R2, R2, #(1<<10)       ; PORTB clock
-        STR     R2, [R1]
+;----------------------------------------
+; Init_UART0_Polling
+;---------------------------------------------------------------
+Init_UART0_Polling PROC
+; Description: Initialize UART0 for polled I/O (8N1, 9600 baud)
+; Input: none
+; Output: none
+; Registers modified: R0, R1
+            LDR     R0, =SIM_SCGC4
+            LDR     R1, [R0]
+            ORR     R1, R1, #(1 << 10) ; Enable UART0 clock
+            STR     R1, [R0]
 
-        LDR     R1, =0x4004803C        ; SIM_SCGC4
-        LDR     R2, [R1]
-        ORR     R2, R2, #(1<<10)       ; UART0 clock
-        STR     R2, [R1]
+            LDR     R0, =SIM_SCGC5
+            LDR     R1, [R0]
+            ORR     R1, R1, #(1 << 10) ; Enable PORTB clock
+            STR     R1, [R0]
 
-        LDR     R1, =0x40048004        ; SIM_SOPT2
-        LDR     R2, [R1]
-        BIC     R2, R2, #(3<<26)
-        ORR     R2, R2, #(1<<26)
-        STR     R2, [R1]
+; Configure PORTB pins 1 (TX) and 2 (RX)
+            LDR     R0, =PORTB_PCR1
+            LDR     R1, =0x020          ; MUX=2: UART0_TX
+            STR     R1, [R0]
+            LDR     R0, =PORTB_PCR2
+            LDR     R1, =0x020          ; MUX=2: UART0_RX
+            STR     R1, [R0]
 
-        LDR     R1, =0x4004A004        
-        MOVS    R2, #2
-        STR     R2, [R1]
+; UART0 baud 9600 @48MHz
+            LDR     R0, =UART0_BDH
+            MOV     R1, #0
+            STR     R1, [R0]
+            LDR     R0, =UART0_BDL
+            MOV     R1, #52             ; BDL = 48MHz/(16*9600) ≈ 3125 → 52
+            STR     R1, [R0]
 
-        LDR     R1, =0x4004A008        
-        MOVS    R2, #2
-        STR     R2, [R1]
+; Enable transmitter and receiver
+            LDR     R0, =UART0_C2
+            MOV     R1, #(1<<2 | 1<<3)  ; RE=1, TE=1
+            STR     R1, [R0]
 
-        LDR     R1, =0x4006A002        
-        MOVS    R2, #0
-        STRB    R2, [R1]
+            BX      LR
+            ENDP
 
-        ; Baud 9600
-        LDR     R1, =0x4006A00A        ; UART0_BDH
-        MOVS    R2, #0x01
-        STRB    R2, [R1]
+;----------------------------------------
+; GetChar
+;---------------------------------------------------------------
+GetChar PROC
+; Description: Poll UART0 and read a character
+; Input: none
+; Output: R0 = received character
+; Registers modified: R0, R1, R2
+PollRX
+            LDR     R1, =UART0_S1
+            LDR     R2, [R1]
+            ANDS    R2, R2, #(1<<5)     ; Check RDRF
+            BEQ     PollRX
+            LDR     R0, =UART0_D
+            LDRB    R0, [R0]
+            BX      LR
+            ENDP
 
-        LDR     R1, =0x4006A00B        ; UART0_BDL
-        MOVS    R2, #0x38
-        STRB    R2, [R1]
+;----------------------------------------
+; PutChar
+;---------------------------------------------------------------
+PutChar PROC
+; Description: Poll UART0 and send a character
+; Input: R0 = character to send
+; Output: none
+; Registers modified: R1, R2
+PollTX
+            LDR     R1, =UART0_S1
+            LDR     R2, [R1]
+            ANDS    R2, R2, #(1<<7)     ; Check TDRE
+            BEQ     PollTX
+            LDR     R1, =UART0_D
+            STRB    R0, [R1]
+            BX      LR
+            ENDP
 
-        LDR     R1, =0x4006A006        
-        MOVS    R2, #0x00            
-        STRB    R2, [R1]
-
-        LDR     R1, =0x4006A002        ; UART0_C2
-        MOVS    R2, #(1<<2)|(1<<3)    
-        STRB    R2, [R1]
-
-        POP     {R1-R7, PC}
-
-GetChar
-        PUSH    {R1, LR}
-
-GC_Wait
-        LDR     R1, =0x4006A004        ; UART0_S1
-        LDRB    R2, [R1]
-        TST     R2, #(1<<5)           ; RDRF
-        BEQ     GC_Wait
-
-        LDR     R1, =0x4006A007        ; UART0_D
-        LDRB    R0, [R1]
-
-        POP     {R1, PC}
-
-PutChar
-        PUSH    {R1, LR}
-
-PC_Wait
-        LDR     R1, =0x4006A004        ; UART0_S1
-        LDRB    R2, [R1]
-        TST     R2, #(1<<7)           
-        BEQ     PC_Wait
-
-        LDR     R1, =0x4006A007        ; UART0_D
-        STRB    R0, [R1]
-
-        POP     {R1, PC}
-
-;>>>>>   end subroutine code <<<<<
             ALIGN
-;****************************************************************
-;Vector Table Mapped to Address 0 at Reset
-;Linker requires __Vectors to be exported
+; Vector Table
             AREA    RESET, DATA, READONLY
             EXPORT  __Vectors
             EXPORT  __Vectors_End
@@ -190,77 +192,53 @@ PC_Wait
             IMPORT  __initial_sp
             IMPORT  Dummy_Handler
             IMPORT  HardFault_Handler
-__Vectors 
-                                      ;ARM core vectors
-            DCD    __initial_sp       ;00:end of stack
-            DCD    Reset_Handler      ;01:reset vector
-            DCD    Dummy_Handler      ;02:NMI
-            DCD    HardFault_Handler  ;03:hard fault
-            DCD    Dummy_Handler      ;04:(reserved)
-            DCD    Dummy_Handler      ;05:(reserved)
-            DCD    Dummy_Handler      ;06:(reserved)
-            DCD    Dummy_Handler      ;07:(reserved)
-            DCD    Dummy_Handler      ;08:(reserved)
-            DCD    Dummy_Handler      ;09:(reserved)
-            DCD    Dummy_Handler      ;10:(reserved)
-            DCD    Dummy_Handler      ;11:SVCall (supervisor call)
-            DCD    Dummy_Handler      ;12:(reserved)
-            DCD    Dummy_Handler      ;13:(reserved)
-            DCD    Dummy_Handler      ;14:PendSV (PendableSrvReq)
-                                      ;   pendable request 
-                                      ;   for system service)
-            DCD    Dummy_Handler      ;15:SysTick (system tick timer)
-            DCD    Dummy_Handler      ;16:DMA channel 0 transfer 
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;17:DMA channel 1 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;18:DMA channel 2 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;19:DMA channel 3 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;20:(reserved)
-            DCD    Dummy_Handler      ;21:FTFA command complete/
-                                      ;   read collision
-            DCD    Dummy_Handler      ;22:low-voltage detect;
-                                      ;   low-voltage warning
-            DCD    Dummy_Handler      ;23:low leakage wakeup
-            DCD    Dummy_Handler      ;24:I2C0
-            DCD    Dummy_Handler      ;25:(reserved)
-            DCD    Dummy_Handler      ;26:SPI0
-            DCD    Dummy_Handler      ;27:(reserved)
-            DCD    Dummy_Handler      ;28:UART0 (status; error)
-            DCD    Dummy_Handler      ;29:(reserved)
-            DCD    Dummy_Handler      ;30:(reserved)
-            DCD    Dummy_Handler      ;31:ADC0
-            DCD    Dummy_Handler      ;32:CMP0
-            DCD    Dummy_Handler      ;33:TPM0
-            DCD    Dummy_Handler      ;34:TPM1
-            DCD    Dummy_Handler      ;35:(reserved)
-            DCD    Dummy_Handler      ;36:RTC (alarm)
-            DCD    Dummy_Handler      ;37:RTC (seconds)
-            DCD    Dummy_Handler      ;38:PIT
-            DCD    Dummy_Handler      ;39:(reserved)
-            DCD    Dummy_Handler      ;40:(reserved)
-            DCD    Dummy_Handler      ;41:DAC0
-            DCD    Dummy_Handler      ;42:TSI0
-            DCD    Dummy_Handler      ;43:MCG
-            DCD    Dummy_Handler      ;44:LPTMR0
-            DCD    Dummy_Handler      ;45:(reserved)
-            DCD    Dummy_Handler      ;46:PORTA
-            DCD    Dummy_Handler      ;47:PORTB
+__Vectors
+            DCD    __initial_sp
+            DCD    Reset_Handler
+            DCD    Dummy_Handler
+            DCD    HardFault_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
+            DCD    Dummy_Handler
 __Vectors_End
-__Vectors_Size  EQU     __Vectors_End - __Vectors
-            ALIGN
-;****************************************************************
-;Constants
-            AREA    MyConst,DATA,READONLY
-;>>>>> begin constants here <<<<<
-;>>>>>   end constants here <<<<<
-            ALIGN
-;****************************************************************
-;Variables
-            AREA    MyData,DATA,READWRITE
-;>>>>> begin variables here <<<<<
-;>>>>>   end variables here <<<<<
+__Vectors_Size  EQU __Vectors_End - __Vectors
             ALIGN
             END
