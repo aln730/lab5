@@ -111,96 +111,86 @@ do_Z
 ;Stay here
             B       .
             ENDP    ;main
-;>>>>> begin subroutine code <<<<<
-;---------------------------------------------------------------
-;UART0 Initialization Subroutine
-;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
-Init_UART0_Polling  PROC
-            PUSH    {R4-R5}          ; save temp registers
+Init_UART0_Polling PROC
+    PUSH {R4-R7}
 
-;Enable clock for UART0 and PortB
-            LDR     R4, =SIM_SCGC4
-            LDR     R5, [R4]
-            MOVS    R2, #1           ; temporary small immediate
-            LSLS    R2, R2, #10      ; 1 << 10 for UART0
-            ORRS    R5, R5, R2
-            STR     R5, [R4]
+;--------------------------------------
+; Select MCGFLLCLK as UART0 clock source
+;--------------------------------------
+    LDR R4, =SIM_SOPT2
+    LDR R5, [R4]
+    LDR R6, =SIM_SOPT2_UART0SRC_MASK
+    BICS R5, R5, R6
+    LDR R6, =SIM_SOPT2_UART0SRC_MCGFLLCLK
+    ORRS R5, R5, R6
+    STR R5, [R4]
 
-            LDR     R4, =SIM_SCGC5
-            LDR     R5, [R4]
-            MOVS    R2, #1
-            LSLS    R2, R2, #10      ; 1 << 10 for PortB
-            ORRS    R5, R5, R2
-            STR     R5, [R4]
+;--------------------------------------
+; Enable clocks
+;--------------------------------------
+    ; UART0 clock
+    LDR R4, =SIM_SCGC4
+    LDR R5, [R4]
+    LDR R6, =SIM_SCGC4_UART0_MASK
+    ORRS R5, R5, R6
+    STR R5, [R4]
 
-;Configure PTB1=TX, PTB2=RX for UART function (MUX=2)
-            LDR     R4, =PORTB_PCR1
-            MOVS    R5, #2
-            LSLS    R5, R5, #8       ; 2 << 8
-            STR     R5, [R4]
+    ; Port B clock
+    LDR R4, =SIM_SCGC5
+    LDR R5, [R4]
+    LDR R6, =SIM_SCGC5_PORTB_MASK
+    ORRS R5, R5, R6
+    STR R5, [R4]
 
-            LDR     R4, =PORTB_PCR2
-            STR     R5, [R4]
+;--------------------------------------
+; PTB1 = TX, PTB2 = RX (MUX=2)
+;--------------------------------------
+    LDR R4, =PORTB_PCR1
+    LDR R5, =PORT_PCR_SET_PTB1_UART0_TX
+    STR R5, [R4]
 
-;Set baud rate = 9600
-;Assume 48MHz system clock, oversampling = 16
-;UART0_BDH, UART0_BDL
-            LDR     R4, =UART0_BDH
-            MOVS    R5, #0            ; MSB of SBR
-            STRB    R5, [R4]
+    LDR R4, =PORTB_PCR2
+    LDR R5, =PORT_PCR_SET_PTB2_UART0_RX
+    STR R5, [R4]
 
-            LDR     R4, =UART0_BDL
-            MOVS    R5, #31           ; LSB of SBR ~ 312 / 0x138
-            STRB    R5, [R4]
+;--------------------------------------
+; Disable UART before config
+;--------------------------------------
+    LDR R4, =UART0_C2
+    LDRB R5, [R4]
+    MOVS R6, #(1<<2)|(1<<3)   ; RE|TE
+    BICS R5, R5, R6
+    STRB R5, [R4]
 
-;Enable transmitter and receiver (RE | TE = 0x0C)
-            LDR     R4, =UART0_C2
-            MOVS    R5, #4            ; 1<<2 = RE
-            MOVS    R2, #8            ; 1<<3 = TE
-            ORRS    R5, R5, R2        ; combine RE|TE
-            STRB    R5, [R4]
+;--------------------------------------
+; Baud = 9600, 8N1, OSR=16
+;--------------------------------------
+    LDR R4, =UART0_BDH
+    MOVS R5, #0x01
+    STRB R5, [R4]
 
-            POP     {R4-R5}
-            BX      LR
-            ENDP
+    LDR R4, =UART0_BDL
+    MOVS R5, #0x38
+    STRB R5, [R4]
 
-PutChar PROC
-PUSH    {R1, R2}
+    LDR R4, =UART0_C1
+    MOVS R5, #0x00        ; 8N1
+    STRB R5, [R4]
 
-Wait_Tx:
-    LDR     R1, =UART0_S1
-    LDRB    R2, [R1]
-    MOVS    R1, #0x80      ; TDRE bit
-    TST     R2, R1
-    BEQ     Wait_Tx
+    LDR R4, =UART0_C4
+    MOVS R5, #0x0F        ; OSR=16
+    STRB R5, [R4]
 
-    LDR     R1, =UART0_D
-    STRB    R0, [R1]
+;--------------------------------------
+; Enable UART RX + TX
+;--------------------------------------
+    LDR R4, =UART0_C2
+    MOVS R5, #(1<<2)|(1<<3)
+    STRB R5, [R4]
 
-POP     {R1, R2}
-BX      LR
+    POP {R4-R7}
+    BX LR
 ENDP
-;---------------------------------------------------------------
-;Polled UART Read Character
-;Output: R0 = received character
-;Registers modified: R1, R2 (saved/restored)
-GetChar PROC
-PUSH    {R1-R2}           ; Save temp registers
-
-Wait_Rx:                   ; Wait until receive buffer full
-    LDR     R1, =UART0_S1
-    LDRB    R2, [R1]
-    MOVS    R1, #0x20      ; RDRF = bit 5
-    TST     R2, R1
-    BEQ     Wait_Rx
-
-    LDR     R1, =UART0_D
-    LDRB    R0, [R1]       ; Read received character
-
-POP     {R1-R2}            ; Restore temp registers
-BX      LR
-ENDP
-;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
 ;Vector Table Mapped to Address 0 at Reset
