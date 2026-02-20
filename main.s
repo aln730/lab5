@@ -165,43 +165,45 @@ Init_UART0_Polling  PROC
             ENDP
 
 ;---------------------------------------------------------------
-;Polled UART Send Character
-;Input: R0 = character to send
-;Output: none
-PutChar  PROC
-            PUSH    {R1}              ; save temp register
+; Polled UART Send Character
+; Input: R0 = character to send
+; Output: none
+PutChar PROC
+PUSH    {R1}              ; save temp register
 
-Wait_Tx:
-            LDR     R1, =UART0_S1
-            LDRB    R2, [R1]
-            TST     R2, #0x80         ; check TDRE (bit 7)
-            BEQ     Wait_Tx           ; wait if not empty
+Wait_Tx:                  ; <-- label at column 0
+    LDR     R1, =UART0_S1
+    LDRB    R2, [R1]
+    MOVS    R3, #0x80     ; TDRE bit
+    TST     R2, R3
+    BEQ     Wait_Tx       ; wait if not empty
 
-            LDR     R1, =UART0_D
-            STRB    R0, [R1]          ; write char to data register
+    LDR     R1, =UART0_D
+    STRB    R0, [R1]      ; write char
 
-            POP     {R1}
-            BX      LR
-            ENDP
+POP     {R1}
+BX      LR
+ENDP
 
 ;---------------------------------------------------------------
-;Polled UART Read Character
-;Output: R0 = received character
-GetChar  PROC
-            PUSH    {R1}              ; save temp register
+; Polled UART Read Character
+; Output: R0 = received character
+GetChar PROC
+PUSH    {R1}              ; save temp register
 
-Wait_Rx:
-            LDR     R1, =UART0_S1
-            LDRB    R2, [R1]
-            TST     R2, #0x20         ; check RDRF (bit 5)
-            BEQ     Wait_Rx           ; wait if no data
+Wait_Rx:                  ; <-- label at column 0
+    LDR     R1, =UART0_S1
+    LDRB    R2, [R1]
+    MOVS    R3, #0x20     ; RDRF bit
+    TST     R2, R3
+    BEQ     Wait_Rx       ; wait if no data
 
-            LDR     R1, =UART0_D
-            LDRB    R0, [R1]          ; read received char
+    LDR     R1, =UART0_D
+    LDRB    R0, [R1]      ; read char
 
-            POP     {R1}
-            BX      LR
-            ENDP
+POP     {R1}
+BX      LR
+ENDP
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
