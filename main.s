@@ -29,8 +29,6 @@
             IMPORT  Overflow
             IMPORT  Zero
             IMPORT  PutPrompt
-            IMPORT  GetChar
-            IMPORT  Init_UART0_Polling
 
 
 Reset_Handler  PROC  {}
@@ -56,7 +54,7 @@ ReadChar
         BLT     CheckCmd
         CMP     R0, #'z'
         BGT     CheckCmd
-        SUB     R0, R0, #32            ; convert to uppercase
+        SUBS     R0, R0, #32            ; convert to uppercase
 
 CheckCmd
         CMP     R0, #'C'
@@ -104,18 +102,27 @@ Init_UART0_Polling
 
         LDR     R1, =0x40048038        ; SIM_SCGC5
         LDR     R2, [R1]
-        ORR     R2, R2, #(1<<10)       ; PORTB clock
+        MOVS    R3, #4
+        LSLS    R3, R3, #8
+        ORRS    R2, R2, R3      ; PORTB clock
         STR     R2, [R1]
 
         LDR     R1, =0x4004803C        ; SIM_SCGC4
         LDR     R2, [R1]
-        ORR     R2, R2, #(1<<10)       ; UART0 clock
+        MOVS    R3, #4
+        LSLS    R3, R3, #8
+        ORRS    R2, R2, R3       ; UART0 clock
         STR     R2, [R1]
 
         LDR     R1, =0x40048004        ; SIM_SOPT2
         LDR     R2, [R1]
-        BIC     R2, R2, #(3<<26)
-        ORR     R2, R2, #(1<<26)
+        MOVS    R3, #3
+        LSLS    R3, R3, #26
+        BICS    R2, R2, R3
+
+        MOVS    R3, #1
+        LSLS    R3, R3, #26
+        ORRS    R2, R2, R3
         STR     R2, [R1]
 
         LDR     R1, =0x4004A004        
@@ -144,7 +151,7 @@ Init_UART0_Polling
         STRB    R2, [R1]
 
         LDR     R1, =0x4006A002        ; UART0_C2
-        MOVS    R2, #(1<<2)|(1<<3)    
+        MOVS    R2, #12   
         STRB    R2, [R1]
 
         POP     {R1-R7, PC}
@@ -155,7 +162,8 @@ GetChar
 GC_Wait
         LDR     R1, =0x4006A004        ; UART0_S1
         LDRB    R2, [R1]
-        TST     R2, #(1<<5)           ; RDRF
+        MOVS    R3, #32
+        TST     R2, R3           ; RDRF
         BEQ     GC_Wait
 
         LDR     R1, =0x4006A007        ; UART0_D
