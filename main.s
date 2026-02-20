@@ -24,13 +24,13 @@
             AREA    MyCode,CODE,READONLY
             ENTRY
             EXPORT  Reset_Handler
-            IMPORT  Startup
-	    EXPORT  PutChar
-	    IMPORT  Carry
-	    IMPORT  Negative
-	    IMPORT  Overflow
-	    IMPORT  PutPrompt
-	    IMPORT  Zero
+            IMPORT  Carry
+            IMPORT  Negative
+            IMPORT  Overflow
+            IMPORT  Zero
+            IMPORT  PutPrompt
+            IMPORT  GetChar
+            IMPORT  Init_UART0_Polling
 
 
 Reset_Handler  PROC  {}
@@ -46,11 +46,12 @@ BL      Init_UART0_Polling     ; initialize UART0
 
 MainLoop
         BL      PutPrompt             
+
 ReadChar
         BL      GetChar               ; R0 = input char
         MOV     R1, R0                ; save original char
 
-        ; check lowercase a-z
+        ; lowercase → uppercase normalization
         CMP     R0, #'a'
         BLT     CheckCmd
         CMP     R0, #'z'
@@ -67,6 +68,7 @@ CheckCmd
         CMP     R0, #'Z'
         BEQ     DoZ
 
+        ; invalid input, ignore and wait again
         B       ReadChar              
 
 DoC
@@ -74,7 +76,6 @@ DoC
         BL      PutChar
         BL      Carry
         B       MainLoop
-
 DoN
         MOV     R0, R1
         BL      PutChar
@@ -254,10 +255,10 @@ __Vectors_Size  EQU     __Vectors_End - __Vectors
             AREA    MyConst,DATA,READONLY
 ;>>>>> begin constants here <<<<<
 PromptStr   DCB 13,10,"Enter flag (C/N/V/Z): ",0
-CarryStr    DCB 13,10,"Carry Flag Selected",13,10,0
-NegStr      DCB 13,10,"Negative Flag Selected",13,10,0
-OvfStr      DCB 13,10,"Overflow Flag Selected",13,10,0
-ZeroStr     DCB 13,10,"Zero Flag Selected",13,10,0
+CarryStr    DCB 13,10,"C - Carry flag selected",13,10,0
+NegStr      DCB 13,10,"N - Negative flag selected",13,10,0
+OvfStr      DCB 13,10,"V - Overflow flag selected",13,10,0
+ZeroStr     DCB 13,10,"Z - Zero flag selected",13,10,0
 ;>>>>>   end constants here <<<<<
             ALIGN
 ;****************************************************************
