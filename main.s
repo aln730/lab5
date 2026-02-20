@@ -100,20 +100,20 @@ CallZero
 Init_UART0_Polling PROC
             LDR     R0, =SIM_SCGC4
             LDR     R1, [R0]
-            ORR     R1, R1, #(1 << 10)      ; Enable UART0 clock
+            ORR     R1, R1, #0x400         ; Enable UART0 clock (1<<10)
             STR     R1, [R0]
 
             LDR     R0, =SIM_SCGC5
             LDR     R1, [R0]
-            ORR     R1, R1, #(1 << 10)      ; Enable PORTB clock
+            ORR     R1, R1, #0x400         ; Enable PORTB clock (1<<10)
             STR     R1, [R0]
 
             ; Configure PORTB pins 1 (TX) and 2 (RX)
             LDR     R0, =PORTB_PCR1
-            LDR     R1, =0x020               ; MUX=2: UART0_TX
+            MOV     R1, #0x20              ; MUX=2 for UART0_TX
             STR     R1, [R0]
             LDR     R0, =PORTB_PCR2
-            LDR     R1, =0x020               ; MUX=2: UART0_RX
+            MOV     R1, #0x20              ; MUX=2 for UART0_RX
             STR     R1, [R0]
 
             ; UART0 baud 9600 @48MHz
@@ -121,12 +121,12 @@ Init_UART0_Polling PROC
             MOV     R1, #0
             STR     R1, [R0]
             LDR     R0, =UART0_BDL
-            MOV     R1, #52                  ; BDL = 48MHz/(16*9600) ≈ 3125 → 52
+            MOV     R1, #52                 ; BDL = 48MHz/(16*9600)
             STR     R1, [R0]
 
             ; Enable transmitter and receiver
             LDR     R0, =UART0_C2
-            MOV     R1, #(1<<2 | 1<<3)       ; RE=1, TE=1
+            MOV     R1, #0xC                ; RE=1, TE=1 -> 0b1100
             STR     R1, [R0]
 
             BX      LR
@@ -142,7 +142,7 @@ GetChar  PROC
 PollRX
             LDR     R1, =UART0_S1
             LDR     R2, [R1]
-            ANDS    R2, R2, #(1<<5)         ; Check RDRF
+            ANDS    R2, R2, #0x20          ; Check RDRF (bit 5)
             BEQ     PollRX
             LDR     R0, =UART0_D
             LDRB    R0, [R0]
@@ -159,12 +159,12 @@ PutChar  PROC
 PollTX
             LDR     R1, =UART0_S1
             LDR     R2, [R1]
-            ANDS    R2, R2, #(1<<7)         ; Check TDRE
+            ANDS    R2, R2, #0x80          ; Check TDRE (bit 7)
             BEQ     PollTX
             LDR     R1, =UART0_D
             STRB    R0, [R1]
             BX      LR
-            ENDPs
+            ENDP
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
