@@ -165,43 +165,46 @@ Init_UART0_Polling  PROC
             ENDP
 
 ;---------------------------------------------------------------
-; Polled UART Send Character
-; Input: R0 = character to send
-; Output: none
+;---------------------------------------------------------------
+;Polled UART Send Character
+;Input:  R0 = character to send
+;Output: none
+;Registers modified: R1, R2 (saved/restored)
 PutChar PROC
-PUSH    {R1}              ; save temp register
+PUSH    {R1-R2}           ; Save temp registers
 
-Wait_Tx:                  ; <-- label at column 0
+Wait_Tx:                   ; Wait until transmit buffer empty
     LDR     R1, =UART0_S1
     LDRB    R2, [R1]
-    MOVS    R3, #0x80     ; TDRE bit
-    TST     R2, R3
-    BEQ     Wait_Tx       ; wait if not empty
+    MOVS    R1, #0x80      ; TDRE = bit 7
+    TST     R2, R1
+    BEQ     Wait_Tx
 
     LDR     R1, =UART0_D
-    STRB    R0, [R1]      ; write char
+    STRB    R0, [R1]       ; Write character to UART data register
 
-POP     {R1}
+POP     {R1-R2}            ; Restore temp registers
 BX      LR
 ENDP
-
 ;---------------------------------------------------------------
-; Polled UART Read Character
-; Output: R0 = received character
+;---------------------------------------------------------------
+;Polled UART Read Character
+;Output: R0 = received character
+;Registers modified: R1, R2 (saved/restored)
 GetChar PROC
-PUSH    {R1}              ; save temp register
+PUSH    {R1-R2}           ; Save temp registers
 
-Wait_Rx:                  ; <-- label at column 0
+Wait_Rx:                   ; Wait until receive buffer full
     LDR     R1, =UART0_S1
     LDRB    R2, [R1]
-    MOVS    R3, #0x20     ; RDRF bit
-    TST     R2, R3
-    BEQ     Wait_Rx       ; wait if no data
+    MOVS    R1, #0x20      ; RDRF = bit 5
+    TST     R2, R1
+    BEQ     Wait_Rx
 
     LDR     R1, =UART0_D
-    LDRB    R0, [R1]      ; read char
+    LDRB    R0, [R1]       ; Read received character
 
-POP     {R1}
+POP     {R1-R2}            ; Restore temp registers
 BX      LR
 ENDP
 ;>>>>>   end subroutine code <<<<<
