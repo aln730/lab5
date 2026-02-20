@@ -164,29 +164,22 @@ Init_UART0_Polling  PROC
             BX      LR
             ENDP
 
-;---------------------------------------------------------------
-;---------------------------------------------------------------
-;Polled UART Send Character
-;Input:  R0 = character to send
-;Output: none
-;Registers modified: R1, R2 (saved/restored)
 PutChar PROC
-PUSH    {R1-R2}           ; Save temp registers
+PUSH    {R1, R2}
 
-Wait_Tx:                   ; Wait until transmit buffer empty
+Wait_Tx:
     LDR     R1, =UART0_S1
     LDRB    R2, [R1]
-    MOVS    R1, #0x80      ; TDRE = bit 7
+    MOVS    R1, #0x80      ; TDRE bit
     TST     R2, R1
     BEQ     Wait_Tx
 
     LDR     R1, =UART0_D
-    STRB    R0, [R1]       ; Write character to UART data register
+    STRB    R0, [R1]
 
-POP     {R1-R2}            ; Restore temp registers
+POP     {R1, R2}
 BX      LR
 ENDP
-;---------------------------------------------------------------
 ;---------------------------------------------------------------
 ;Polled UART Read Character
 ;Output: R0 = received character
