@@ -106,6 +106,8 @@ do_Z
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
 ;---------------------------------------------------------------
+;>>>>> begin subroutine code <<<<<
+;---------------------------------------------------------------
 ;UART0 Initialization Subroutine
 ;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
 Init_UART0_Polling  PROC
