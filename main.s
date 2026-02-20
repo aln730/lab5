@@ -44,20 +44,20 @@ main
             BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
-BL      Init_UART0_Polling     ; initialize UART0
+        BL      Init_UART0_Polling
 
 MainLoop
-        BL      PutPrompt             
+        BL      PutPrompt
 ReadChar
-        BL      GetChar               ; R0 = input char
-        MOV     R1, R0                ; save original char
+        BL      GetChar
+        MOVS    R1, R0               ; save original char
 
-        ; check lowercase a-z
+        ; lowercase a-z check
         CMP     R0, #'a'
         BLT     CheckCmd
         CMP     R0, #'z'
         BGT     CheckCmd
-        SUB     R0, R0, #32            ; convert to uppercase
+        SUBS    R0, R0, #32          ; convert to uppercase
 
 CheckCmd
         CMP     R0, #'C'
@@ -69,31 +69,32 @@ CheckCmd
         CMP     R0, #'Z'
         BEQ     DoZ
 
-        B       ReadChar              
+        B       ReadChar
 
 DoC
-        MOV     R0, R1
+        MOVS    R0, R1
         BL      PutChar
         BL      Carry
         B       MainLoop
 
 DoN
-        MOV     R0, R1
+        MOVS    R0, R1
         BL      PutChar
         BL      Negative
         B       MainLoop
 
 DoV
-        MOV     R0, R1
+        MOVS    R0, R1
         BL      PutChar
         BL      Overflow
         B       MainLoop
 
 DoZ
-        MOV     R0, R1
+        MOVS    R0, R1
         BL      PutChar
         BL      Zero
         B       MainLoop
+
 
 ;>>>>>   end main program code <<<<<
 ;Stay here
@@ -101,103 +102,68 @@ DoZ
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
 Init_UART0_Polling  PROC
-        PUSH    {R1-R7, LR}
+        PUSH    {R1-R3, LR}
 
         ; Enable PORTB clock
-        LDR     R1, =0x40048038        ; SIM_SCGC5
+        LDR     R1, =0x40048038
         LDR     R2, [R1]
         LDR     R3, =(1<<10)
-        ORR     R2, R2, R3
+        ORRS    R2, R2, R3
         STR     R2, [R1]
 
         ; Enable UART0 clock
-        LDR     R1, =0x4004803C        ; SIM_SCGC4
+        LDR     R1, =0x4004803C
         LDR     R2, [R1]
         LDR     R3, =(1<<10)
-        ORR     R2, R2, R3
+        ORRS    R2, R2, R3
         STR     R2, [R1]
 
-        ; Select MCGFLLCLK as UART0 clock source
-        LDR     R1, =0x40048004        ; SIM_SOPT2
+        ; SIM_SOPT2: select UART0 clock
+        LDR     R1, =0x40048004
         LDR     R2, [R1]
         LDR     R3, =(3<<26)
-        BIC     R2, R2, R3
+        BICS    R2, R2, R3
         LDR     R3, =(1<<26)
-        ORR     R2, R2, R3
+        ORRS    R2, R2, R3
         STR     R2, [R1]
 
-        ; Configure PORTB pins for UART0
-        LDR     R1, =0x4004A004        ; PORTB_PCR16
+        ; PORTB pins for UART0
+        LDR     R1, =0x4004A004
         MOVS    R2, #2
         STR     R2, [R1]
 
-        LDR     R1, =0x4004A008        ; PORTB_PCR17
+        LDR     R1, =0x4004A008
         MOVS    R2, #2
         STR     R2, [R1]
 
         ; UART0_C1 = 0
-        LDR     R1, =0x4006A002        
+        LDR     R1, =0x4006A002
         MOVS    R2, #0
         STRB    R2, [R1]
 
         ; Baud 9600
-        LDR     R1, =0x4006A00A        ; UART0_BDH
+        LDR     R1, =0x4006A00A
         MOVS    R2, #0x01
         STRB    R2, [R1]
-
-        LDR     R1, =0x4006A00B        ; UART0_BDL
+        LDR     R1, =0x4006A00B
         MOVS    R2, #0x38
         STRB    R2, [R1]
 
         ; UART0_C4 = 0
-        LDR     R1, =0x4006A006        
-        MOVS    R2, #0x00            
+        LDR     R1, =0x4006A006
+        MOVS    R2, #0x00
         STRB    R2, [R1]
 
-        ; UART0_C2: enable RE and TE safely
-        LDR     R1, =0x4006A002        ; UART0_C2
+        ; UART0_C2: enable RE and TE
+        LDR     R1, =0x4006A002
         LDR     R2, [R1]
-        LDR     R3, =(1<<2)            ; RE
-        ORR     R2, R2, R3
-        LDR     R3, =(1<<3)            ; TE
-        ORR     R2, R2, R3
+        LDR     R3, =(1<<2)  ; RE
+        ORRS    R2, R2, R3
+        LDR     R3, =(1<<3)  ; TE
+        ORRS    R2, R2, R3
         STRB    R2, [R1]
 
-        POP     {R1-R7, PC}
-        ENDP
-
-
-GetChar  PROC
-        PUSH    {R1, LR}
-
-GC_Wait
-        LDR     R1, =0x4006A004        ; UART0_S1
-        LDRB    R2, [R1]
-        LDR     R3, =(1<<5)            ; RDRF
-        TST     R2, R3
-        BEQ     GC_Wait
-
-        LDR     R1, =0x4006A007        ; UART0_D
-        LDRB    R0, [R1]
-
-        POP     {R1, PC}
-        ENDP
-
-
-PutChar  PROC
-        PUSH    {R1, LR}
-
-PC_Wait
-        LDR     R1, =0x4006A004        ; UART0_S1
-        LDRB    R2, [R1]
-        LDR     R3, =(1<<7)            ; TDRE
-        TST     R2, R3
-        BEQ     PC_Wait
-
-        LDR     R1, =0x4006A007        ; UART0_D
-        STRB    R0, [R1]
-
-        POP     {R1, PC}
+        POP     {R1-R3, PC}
         ENDP
 ;>>>>>   end subroutine code <<<<<
             ALIGN
