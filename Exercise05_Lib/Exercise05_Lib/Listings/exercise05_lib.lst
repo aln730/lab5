@@ -1,0 +1,308 @@
+
+
+
+ARM Macro Assembler    Page 1 Lab Exercise Five Library
+
+
+    1 00000000                 TTL              Lab Exercise Five Library
+    2 00000000         ;****************************************************************
+    3 00000000         ;Provides subroutines for Lab Exercise Five.
+    4 00000000         ;* PutPrompt
+    5 00000000         ;* Carry
+    6 00000000         ;* Negative
+    7 00000000         ;* Overflow
+    8 00000000         ;* Zero
+    9 00000000         ;Name:  R. W. Melton
+   10 00000000         ;Date:  February 10, 2025
+   11 00000000         ;Class:  CMPE-250
+   12 00000000         ;Section:  All sections
+   13 00000000         ;---------------------------------------------------------------
+   14 00000000         ;Keil Template for KL05
+   15 00000000         ;R. W. Melton
+   16 00000000         ;September 13, 2020
+   17 00000000         ;****************************************************************
+   18 00000000         ;Assembler directives
+   19 00000000                 THUMB
+   21 00000000         ;****************************************************************
+   22 00000000         ;Include files
+   23 00000000                 GET              MKL05Z4.s   ;Included by start.s
+   25 00000000         ;****************************************************************
+   26 00000000         ;EQUates
+   27 00000000         ;Characters
+   28 00000000 0000000D 
+                       CR      EQU              0x0D
+   29 00000000 0000000A 
+                       LF      EQU              0x0A
+   30 00000000 00000000 
+                       NULL    EQU              0x00
+   31 00000000         ;****************************************************************
+   32 00000000         ;Exercise05_Lib Subroutines
+   33 00000000         ;Requires PutChar subroutine
+   34 00000000                 AREA             Exercise05_Lib,CODE,READONLY
+   35 00000000                 EXPORT           Carry
+   36 00000000                 EXPORT           Negative
+   37 00000000                 EXPORT           Overflow
+   38 00000000                 EXPORT           PutPrompt
+   39 00000000                 EXPORT           Zero
+   40 00000000                 IMPORT           PutChar
+   41 00000000         ;---------------------------------------------------------------
+
+
+
+ARM Macro Assembler    Page 2 Lab Exercise Five Library
+
+
+   42 00000000         Carry   PROC             {R0-R13}
+   43 00000000         ;**********************************************************************
+   44 00000000         ;Prints glossary entry for C (carry) on a separate line
+   45 00000000         ;Input:     none
+   46 00000000         ;Output:    none
+   47 00000000         ;Calls:     PutString
+   48 00000000         ;Uses:      c_String
+   49 00000000         ;Modifies:  PSR
+   50 00000000         ;**********************************************************************
+   51 00000000 B501            PUSH             {R0,LR}     ;save registers modified
+   52 00000002 A01E            ADR              R0,c_string ;&c_string
+   53 00000004 F7FF FFFE       BL               PutString
+   54 00000008 BD01            POP              {R0,PC}     ;restore registers and return
+   55 0000000A                 ENDP                         ;Carry
+   56 0000000A         ;---------------------------------------------------------------
+   57 0000000A         Negative
+                               PROC             {R0-R13}
+   58 0000000A         ;**********************************************************************
+   59 0000000A         ;Prints glossary entry for N (negative) on a separate line
+   60 0000000A         ;Input:     none
+   61 0000000A         ;Output:    none
+   62 0000000A         ;Calls:     PutString
+   63 0000000A         ;Uses:      n_String
+   64 0000000A         ;Modifies:  PSR
+   65 0000000A         ;**********************************************************************
+   66 0000000A B501            PUSH             {R0,LR}     ;save registers modified
+   67 0000000C A02E            ADR              R0,n_string ;&n_string
+   68 0000000E F7FF FFFE       BL               PutString
+   69 00000012 BD01            POP              {R0,PC}     ;restore registers and return
+   70 00000014                 ENDP                         ;Negative
+   71 00000014         ;---------------------------------------------------------------
+   72 00000014         Overflow
+                               PROC             {R0-R13}
+   73 00000014         ;**********************************************************************
+   74 00000014         ;Prints glossary entry for V (overflow) on a separate line
+   75 00000014         ;Input:     none
+   76 00000014         ;Output:    none
+   77 00000014         ;Calls:     PutString
+   78 00000014         ;Uses:      v_String
+   79 00000014         ;Modifies:  PSR
+   80 00000014         ;**********************************************************************
+   81 00000014 B501            PUSH             {R0,LR}     ;save registers modified
+
+
+
+ARM Macro Assembler    Page 3 Lab Exercise Five Library
+
+
+   82 00000016 A03E            ADR              R0,v_string ;&v_string
+   83 00000018 F7FF FFFE       BL               PutString
+   84 0000001C BD01            POP              {R0,PC}     ;restore registers and return
+   85 0000001E                 ENDP                         ;Overflow
+   86 0000001E         ;---------------------------------------------------------------
+   87 0000001E         PutPrompt
+                               PROC             {R0-R13}
+   88 0000001E         ;**********************************************************************
+   89 0000001E         ;Puts prompt on terminal
+   90 0000001E         ;Input:     none
+   91 0000001E         ;Output:    none
+   92 0000001E         ;Calls:     PutString
+   93 0000001E         ;Uses:      prompt
+   94 0000001E         ;Modifies:  PSR
+   95 0000001E         ;**********************************************************************
+   96 0000001E         ;Save registers
+   97 0000001E B501            PUSH             {R0,LR}
+   98 00000020 A00B            ADR              R0,prompt   ;Put prompt
+   99 00000022 F7FF FFFE       BL               PutString
+  100 00000026 BD01            POP              {R0,PC}
+  101 00000028                 ENDP                         ;PutPrompt
+  102 00000028         ;---------------------------------------------------------------
+  103 00000028         PutString
+                               PROC             {R0-R13}
+  104 00000028         ;**********************************************************************
+  105 00000028         ;Transmits each character in null-terminated string to UART0.
+  106 00000028         ;Input:     R0: Address of string to transmit
+  107 00000028         ;Output:    none
+  108 00000028         ;Calls:     PutChar
+  109 00000028         ;Modifies:  PSR
+  110 00000028         ;**********************************************************************
+  111 00000028         ;Save registers
+  112 00000028 B507            PUSH             {R0-R2,LR}
+  113 0000002A 4A08            LDR              R2,ptr_PutChar ;Needed to call PutChar in loop
+  114 0000002C 4601            MOV              R1,R0       ;R0 needed for parameter
+  115 0000002E         PutStringLoop                        ;repeat {
+  116 0000002E 7808            LDRB             R0,[R1,#0]  ;  CurrentChar of string
+  117 00000030 2800            CMP              R0,#NULL    ;  if (CurrentChar != NULL) {
+  118 00000032 D004            BEQ              PutStringDone
+  119 00000034 B40F            PUSH             {R0-R3}     ;    /* Support C PutChar () */
+  120 00000036 4790            BLX              R2          ;    Send current char to terminal
+  121 00000038 BC0F            POP              {R0-R3}     ;    /* Support C PutChar () */
+
+
+
+ARM Macro Assembler    Page 4 Lab Exercise Five Library
+
+
+  122 0000003A 1C49            ADDS             R1,R1,#1    ;    CurrentCharPtr++
+  123 0000003C E7F7            B                PutStringLoop ;} until (CurrentChar == NULL)
+  124 0000003E         ;Restore registers
+  125 0000003E         PutStringDone
+  126 0000003E BD07            POP              {R0-R2,PC}
+  127 00000040                 ENDP                         ;PutString
+  128 00000040         ;---------------------------------------------------------------
+  129 00000040         Zero    PROC             {R0-R13}
+  130 00000040         ;**********************************************************************
+  131 00000040         ;Prints glossary entry for Z (zero) on a separate line
+  132 00000040         ;Input:     none
+  133 00000040         ;Output:    none
+  134 00000040         ;Calls:     PutString
+  135 00000040         ;Uses:      z_string
+  136 00000040         ;Modifies:  PSR
+  137 00000040         ;**********************************************************************
+  138 00000040 B501            PUSH             {R0,LR}     ;save registers modified
+  139 00000042 A042            ADR              R0,z_string ;&z_string
+  140 00000044 F7FF FFFE       BL               PutString
+  141 00000048 BD01            POP              {R0,PC}     ;restore registers and return
+  142 0000004A                 ENDP                         ;Zero
+  143 0000004A         ;---------------------------------------------------------------
+  144 0000004A         ;****************************************************************
+  145 0000004A 00 00           ALIGN
+  146 0000004C 00000000 
+                       ptr_PutChar
+                               DCD              PutChar
+  147 00000050                 ALIGN
+  148 00000050 54 79 70 
+              65 20 61 
+              20 6C 65 
+              74 74 65 
+              72 20 66 
+              6F 72 20 
+              41 50 53 
+              52 20 67 
+              6C 6F 73 
+              73 61 72 
+              79 20 6C 
+              6F 6F 6B 
+              75 70 2E prompt  DCB              "Type a letter for APSR glossary lookup."
+  149 00000077 0D 0A 3E 
+
+
+
+ARM Macro Assembler    Page 5 Lab Exercise Five Library
+
+
+              00               DCB              CR,LF,'>',NULL
+  150 0000007B 00              ALIGN
+  151 0000007C 0D 0A   c_string
+                               DCB              CR,LF
+  152 0000007E 43 61 72 
+              72 79 3A 
+              20 20 73 
+              65 74 20 
+              69 66 20 
+              74 68 65 
+              72 65 20 
+              77 61 73 
+              20 61 20 
+              63 61 72 
+              72 79 20 
+              6F 75 74 
+              20 6F 66 
+              20               DCB              "Carry:  set if there was a carry out of "
+  153 000000A6 28 6F 72 
+              20 6E 6F 
+              20 62 6F 
+              72 72 6F 
+              77 20 69 
+              6E 74 6F 
+              29 20 74 
+              68 65 20 
+              6D 73 62 
+              2E               DCB              "(or no borrow into) the msb."
+  154 000000C2 0D 0A 00        DCB              CR,LF,NULL
+  155 000000C5 00 00 00        ALIGN
+  156 000000C8 0D 0A   n_string
+                               DCB              CR,LF
+  157 000000CA 4E 65 67 
+              61 74 69 
+              76 65 3A 
+              20 20 73 
+              65 74 20 
+              69 66 20 
+              72 65 73 
+              75 6C 74 
+              20 69 73 
+              20 6E 65 
+
+
+
+ARM Macro Assembler    Page 6 Lab Exercise Five Library
+
+
+              67 61 74 
+              69 76 65 
+              20 66 6F 
+              72 20            DCB              "Negative:  set if result is negative for "
+  158 000000F3 73 69 67 
+              6E 65 64 
+              20 6E 75 
+              6D 62 65 
+              72 3B 20 
+              4E 20 3D 
+              20 6D 73 
+              62 2E            DCB              "signed number; N = msb."
+  159 0000010A 0D 0A 00        DCB              CR,LF,NULL
+  160 0000010D 00 00 00        ALIGN
+  161 00000110 0D 0A   v_string
+                               DCB              CR,LF
+  162 00000112 4F 76 65 
+              72 66 6C 
+              6F 77 3A 
+              20 20 73 
+              65 74 20 
+              69 66 20 
+              72 65 73 
+              75 6C 74 
+              20 69 73 
+              20 69 6E 
+              76 61 6C 
+              69 64 20 
+              66 6F 72 
+              20               DCB              "Overflow:  set if result is invalid for "
+  163 0000013A 73 69 67 
+              6E 65 64 
+              20 6E 75 
+              6D 62 65 
+              72 2E            DCB              "signed number."
+  164 00000148 0D 0A 00        DCB              CR,LF,NULL
+  165 0000014B 00              ALIGN
+  166 0000014C 0D 0A   z_string
+                               DCB              CR,LF
+  167 0000014E 5A 65 72 
+              6F 3A 20 
+              20 73 65 
+
+
+
+ARM Macro Assembler    Page 7 Lab Exercise Five Library
+
+
+              74 20 69 
+              66 20 72 
+              65 73 75 
+              6C 74 20 
+              69 73 20 
+              7A 65 72 
+              6F 2E            DCB              "Zero:  set if result is zero."
+  168 0000016B 0D 0A 00        DCB              CR,LF,NULL
+  169 0000016E 00 00           ALIGN
+  170 00000170                 END
+Command Line: --length=49 --width=120 --diag_suppress=9931 --cpu=Cortex-M0+ --apcs=interwork --depend=.\objects\exercise
+05_lib.d -o.\objects\exercise05_lib.o -I.\RTE\_Target_1 -IC:\Keil_v5\ARM\PACK\Keil\Kinetis_KLxx_DFP\1.14.0\Device\Includ
+e -IC:\Keil_v5\ARM\CMSIS\Include --predefine="__EVAL SETA 1" --predefine="__UVISION_VERSION SETA 524" --predefine="MKL05
+Z32xxx4 SETA 1" --list=.\listings\exercise05_lib.lst Exercise05_Lib.s
