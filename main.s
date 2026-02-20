@@ -94,12 +94,13 @@ DoZ
         BL      PutChar
         BL      Zero
         B       MainLoop
+
 ;>>>>>   end main program code <<<<<
 ;Stay here
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-Init_UART0_Polling
+Init_UART0_Polling  PROC
         PUSH    {R1-R7, LR}
 
         ; Enable PORTB clock
@@ -119,8 +120,10 @@ Init_UART0_Polling
         ; Select MCGFLLCLK as UART0 clock source
         LDR     R1, =0x40048004        ; SIM_SOPT2
         LDR     R2, [R1]
-        BIC     R2, R2, #(3<<26)
-        ORR     R2, R2, #(1<<26)
+        LDR     R3, =(3<<26)
+        BIC     R2, R2, R3
+        LDR     R3, =(1<<26)
+        ORR     R2, R2, R3
         STR     R2, [R1]
 
         ; Configure PORTB pins for UART0
@@ -153,15 +156,18 @@ Init_UART0_Polling
 
         ; UART0_C2: enable RE and TE safely
         LDR     R1, =0x4006A002        ; UART0_C2
-        MOVS    R2, #0
-        ORRS    R2, R2, #(1<<2)        ; RE
-        ORRS    R2, R2, #(1<<3)        ; TE
+        LDR     R2, [R1]
+        LDR     R3, =(1<<2)            ; RE
+        ORR     R2, R2, R3
+        LDR     R3, =(1<<3)            ; TE
+        ORR     R2, R2, R3
         STRB    R2, [R1]
 
         POP     {R1-R7, PC}
+        ENDP
 
 
-GetChar
+GetChar  PROC
         PUSH    {R1, LR}
 
 GC_Wait
@@ -175,9 +181,10 @@ GC_Wait
         LDRB    R0, [R1]
 
         POP     {R1, PC}
+        ENDP
 
 
-PutChar
+PutChar  PROC
         PUSH    {R1, LR}
 
 PC_Wait
@@ -191,6 +198,7 @@ PC_Wait
         STRB    R0, [R1]
 
         POP     {R1, PC}
+        ENDP
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
