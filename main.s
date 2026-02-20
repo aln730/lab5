@@ -36,81 +36,63 @@
 			IMPORT  Carry
 Reset_Handler  PROC  {}
 main
-;---------------------------------------------------------------
-;Mask interrupts
-            CPSID   I
-;KL05 system startup with 48-MHz system clock
-            BL      Startup
-;---------------------------------------------------------------
-;>>>>> begin main program code <<<<<
-;---------------------------------------------------------------
-;Mask interrupts
-            CPSID   I
-;KL05 system startup
-            BL      Startup
 
-main_loop
-;Initialize UART0
+Reset_Handler  PROC {}
+main
+            CPSID   I
+            BL      Startup                 ; KL05 system init
+
             BL      Init_UART0_Polling
+command_loop
 
-menu_loop
-;Display prompt
             BL      PutPrompt
+			
+            BL      GetChar                 ; R0 = typed char
 
-;Read a character from terminal
-            BL      GetChar       ; returns character in R0
 
-;Check if lowercase and convert to uppercase
-            MOV     R1, R0
-            CMP     R0, #'a'
-            BLT     skip_upper
-            CMP     R0, #'z'
-            BGT     skip_upper
-            SUBS     R1, R1, #32  ; convert to uppercase
+            MOV     R1, R0                  ; R1 = working copy
 
-skip_upper
-;Check if R1 = 'C','N','V','Z'
+            CMP     R1, #'a'
+            BLT     not_lower
+            CMP     R1, #'z'
+            BGT     not_lower
+            SUBS    R1, R1, #32              ; convert to uppercase
+
+not_lower
             CMP     R1, #'C'
-            BEQ     do_C
+            BEQ     cmd_C
             CMP     R1, #'N'
-            BEQ     do_N
+            BEQ     cmd_N
             CMP     R1, #'V'
-            BEQ     do_V
+            BEQ     cmd_V
             CMP     R1, #'Z'
-            BEQ     do_Z
-;If invalid command, loop back
-            B       menu_loop
+            BEQ     cmd_Z
 
-;---------------------------------------------------------------
-do_C
-;Echo original character
-            MOV     R0, R0
-            BL      PutChar
-;Call Carry subroutine
+            B       command_loop             ; invalid → try again
+
+
+cmd_C
+            BL      PutChar                  ; echo typed char
             BL      Carry
-            B       menu_loop
+            B       command_loop
 
-do_N
-            MOV     R0, R0
+cmd_N
             BL      PutChar
             BL      Negative
-            B       menu_loop
+            B       command_loop
 
-do_V
-            MOV     R0, R0
+cmd_V
             BL      PutChar
             BL      Overflow
-            B       menu_loop
+            B       command_loop
 
-do_Z
-            MOV     R0, R0
+cmd_Z
             BL      PutChar
             BL      Zero
-            B       menu_loop
-;>>>>>   end main program code <<<<<
-;Stay here
+            B       command_loop
+
             B       .
-            ENDP    ;main
+            ENDP
 ;---------------------------------------------------------------
 ; Init_UART0_Polling
 ; UART0 init for KL05Z
