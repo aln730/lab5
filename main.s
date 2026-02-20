@@ -105,6 +105,7 @@ do_Z
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
+;>>>>> begin subroutine code <<<<<
 ;---------------------------------------------------------------
 ;UART0 Initialization Subroutine
 ;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
@@ -114,18 +115,24 @@ Init_UART0_Polling  PROC
 ;Enable clock for UART0 and PortB
             LDR     R4, =SIM_SCGC4
             LDR     R5, [R4]
-            ORR     R5, R5, #(1<<10) ; enable UART0 clock
+            MOVS    R2, #1           ; temporary small immediate
+            LSLS    R2, R2, #10      ; 1 << 10 for UART0
+            ORRS    R5, R5, R2
             STR     R5, [R4]
 
             LDR     R4, =SIM_SCGC5
             LDR     R5, [R4]
-            ORR     R5, R5, #(1<<10) ; enable Port B clock
+            MOVS    R2, #1
+            LSLS    R2, R2, #10      ; 1 << 10 for PortB
+            ORRS    R5, R5, R2
             STR     R5, [R4]
 
-;Configure PTB1=TX, PTB2=RX for UART function
+;Configure PTB1=TX, PTB2=RX for UART function (MUX=2)
             LDR     R4, =PORTB_PCR1
-            MOV     R5, #(2<<8)       ; MUX = 2 for UART
+            MOVS    R5, #2
+            LSLS    R5, R5, #8       ; 2 << 8
             STR     R5, [R4]
+
             LDR     R4, =PORTB_PCR2
             STR     R5, [R4]
 
@@ -133,15 +140,18 @@ Init_UART0_Polling  PROC
 ;Assume 48MHz system clock, oversampling = 16
 ;UART0_BDH, UART0_BDL
             LDR     R4, =UART0_BDH
-            MOV     R5, #0            ; MSB of SBR
-            STRB    R5, [R4]
-            LDR     R4, =UART0_BDL
-            MOV     R5, #31           ; LSB of SBR ~ 312 / 0x138
+            MOVS    R5, #0            ; MSB of SBR
             STRB    R5, [R4]
 
-;Enable transmitter and receiver
+            LDR     R4, =UART0_BDL
+            MOVS    R5, #31           ; LSB of SBR ~ 312 / 0x138
+            STRB    R5, [R4]
+
+;Enable transmitter and receiver (RE | TE = 0x0C)
             LDR     R4, =UART0_C2
-            MOV     R5, #(1<<2)|(1<<3)  ; RE | TE
+            MOVS    R5, #4            ; 1<<2 = RE
+            MOVS    R2, #8            ; 1<<3 = TE
+            ORRS    R5, R5, R2        ; combine RE|TE
             STRB    R5, [R4]
 
             POP     {R4-R5}
