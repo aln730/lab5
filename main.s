@@ -101,7 +101,7 @@ DoZ
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-Init_UART0_Polling  PROC
+Init_UART0_Polling PROC
         PUSH    {R1-R3, LR}
 
         ; Enable PORTB clock
@@ -165,6 +165,43 @@ Init_UART0_Polling  PROC
 
         POP     {R1-R3, PC}
         ENDP
+
+;-------------------------
+; GetChar
+;-------------------------
+GetChar PROC
+        PUSH    {R1, LR}
+
+GC_Wait
+        LDR     R1, =0x4006A004        ; UART0_S1
+        LDRB    R2, [R1]
+        TST     R2, #(1<<5)           ; RDRF
+        BEQ     GC_Wait
+
+        LDR     R1, =0x4006A007        ; UART0_D
+        LDRB    R0, [R1]
+
+        POP     {R1, PC}
+        ENDP
+
+;-------------------------
+; PutChar
+;-------------------------
+PutChar PROC
+        PUSH    {R1, LR}
+
+PC_Wait
+        LDR     R1, =0x4006A004        ; UART0_S1
+        LDRB    R2, [R1]
+        TST     R2, #(1<<7)
+        BEQ     PC_Wait
+
+        LDR     R1, =0x4006A007        ; UART0_D
+        STRB    R0, [R1]
+
+        POP     {R1, PC}
+        ENDP
+
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
