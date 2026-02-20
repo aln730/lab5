@@ -102,7 +102,7 @@ DoZ
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
 ;======================
-; Initialize UART0 (Polling)
+; Initialize UART0 (Polling) - Cortex-M0 compatible
 ;======================
 Init_UART0_Polling PROC
     PUSH {R1-R7, LR}
@@ -110,13 +110,17 @@ Init_UART0_Polling PROC
     ; Enable PORTB clock
     LDR  R1, =0x40048038       ; SIM_SCGC5
     LDR  R2, [R1]
-    ORR  R2, R2, #1<<10
+    MOVS R3, #1
+    LSL  R3, R3, #10           ; 1 << 10
+    ORR  R2, R2, R3
     STR  R2, [R1]
 
     ; Enable UART0 clock
     LDR  R1, =0x4004803C       ; SIM_SCGC4
     LDR  R2, [R1]
-    ORR  R2, R2, #1<<10
+    MOVS R3, #1
+    LSL  R3, R3, #10           ; 1 << 10
+    ORR  R2, R2, R3
     STR  R2, [R1]
 
     ; Configure UART0 transmit/receive source
@@ -127,7 +131,9 @@ Init_UART0_Polling PROC
     LSL  R3, R3, #26
     BIC  R2, R2, R3
     ; Set bit 26
-    ORR  R2, R2, #1<<26
+    MOVS R3, #1
+    LSL  R3, R3, #26
+    ORR  R2, R2, R3
     STR  R2, [R1]
 
     ; Configure PORTB pins (PTB1=RX, PTB2=TX)
@@ -139,32 +145,36 @@ Init_UART0_Polling PROC
     MOVS R2, #2
     STR  R2, [R1]
 
-    ; UART0_C1 = 0 (default)
+    ; UART0_C1 = 0
     LDR  R1, =0x4006A002       ; UART0_C1
     MOVS R2, #0
     STRB R2, [R1]
 
-    ; Baud rate: 9600 (48MHz / 16 / 9600)
+    ; Baud rate 9600
     LDR  R1, =0x4006A00A       ; UART0_BDH
     MOVS R2, #0
     STRB R2, [R1]
 
     LDR  R1, =0x4006A00B       ; UART0_BDL
-    MOVS R2, #52               ; BD = 52
+    MOVS R2, #52
     STRB R2, [R1]
 
     ; UART0_C2: Enable RE and TE
     LDR  R1, =0x4006A002       ; UART0_C2
     MOVS R2, #0
-    ORRS R2, R2, #1<<2         ; RE
-    ORRS R2, R2, #1<<3         ; TE
+    MOVS R3, #1
+    LSL  R3, R3, #2            ; RE = 1<<2
+    ORR  R2, R2, R3
+    MOVS R3, #1
+    LSL  R3, R3, #3            ; TE = 1<<3
+    ORR  R2, R2, R3
     STRB R2, [R1]
 
     POP {R1-R7, PC}
 ENDP
 
 ;======================
-; Get a character from UART0
+; Get a character from UART0 - Cortex-M0 compatible
 ;======================
 GetChar PROC
     PUSH {R1, LR}
@@ -172,7 +182,9 @@ GetChar PROC
 GC_Wait
     LDR  R1, =0x4006A004       ; UART0_S1
     LDRB R2, [R1]
-    ANDS R2, R2, #1<<5         ; Check RDRF
+    MOVS R3, #1
+    LSL  R3, R3, #5            ; RDRF = 1<<5
+    ANDS R2, R2, R3
     BEQ  GC_Wait
 
     LDR  R1, =0x4006A007       ; UART0_D
@@ -182,7 +194,7 @@ GC_Wait
 ENDP
 
 ;======================
-; Send a character via UART0
+; Send a character via UART0 - Cortex-M0 compatible
 ;======================
 PutChar PROC
     PUSH {R1, LR}
@@ -190,7 +202,9 @@ PutChar PROC
 PC_Wait
     LDR  R1, =0x4006A004       ; UART0_S1
     LDRB R2, [R1]
-    ANDS R2, R2, #1<<7         ; Check TDRE
+    MOVS R3, #1
+    LSL  R3, R3, #7            ; TDRE = 1<<7
+    ANDS R2, R2, R3
     BEQ  PC_Wait
 
     LDR  R1, =0x4006A007       ; UART0_D
