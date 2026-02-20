@@ -113,134 +113,107 @@ do_Z
             ENDP    ;main
 ;---------------------------------------------------------------
 ; Init_UART0_Polling
-; Initializes UART0 for polled serial I/O
+; UART0 init for KL05Z
 ; 9600 baud, 8N1, PTB1=TX, PTB2=RX
 ; Input : none
 ; Output: none
 ; Registers modified: LR, PC, PSR only
 ;---------------------------------------------------------------
 Init_UART0_Polling  PROC
-    PUSH {R0-R7}                 ; preserve all working regs
+    PUSH {R1-R5}
 
-    ; Select MCGFLLCLK as UART0 clock source
-    LDR  R0, =SIM_SOPT2
-    LDR  R1, [R0]
-    BIC  R1, R1, #SIM_SOPT2_UART0SRC_MASK
-    ORR  R1, R1, #SIM_SOPT2_UART0SRC_MCGFLLCLK
-    STR  R1, [R0]
+    ; Enable UART0 clock (SIM_SCGC4 bit 10)
+    LDR     R4, =SIM_SCGC4
+    LDR     R5, [R4]
+    MOVS    R1, #1
+    LSLS    R1, R1, #10
+    ORRS    R5, R5, R1
+    STR     R5, [R4]
 
-    ; Set UART0 for external connection
-    LDR  R0, =SIM_SOPT5
-    LDR  R1, [R0]
-    BIC  R1, R1, #SIM_SOPT5_UART0_EXTERN_MASK_CLEAR
-    STR  R1, [R0]
+    ; Enable PORTB clock (SIM_SCGC5 bit 10)
+    LDR     R4, =SIM_SCGC5
+    LDR     R5, [R4]
+    MOVS    R1, #1
+    LSLS    R1, R1, #10
+    ORRS    R5, R5, R1
+    STR     R5, [R4]
 
-    ; Enable UART0 clock
-    LDR  R0, =SIM_SCGC4
-    LDR  R1, [R0]
-    ORR  R1, R1, #SIM_SCGC4_UART0_MASK
-    STR  R1, [R0]
+    ; PTB1 = UART0_TX (MUX = 2)
+    LDR     R4, =PORTB_PCR1
+    MOVS    R5, #2
+    LSLS    R5, R5, #8
+    STR     R5, [R4]
 
-    ; Enable PORTB clock
-    LDR  R0, =SIM_SCGC5
-    LDR  R1, [R0]
-    ORR  R1, R1, #SIM_SCGC5_PORTB_MASK
-    STR  R1, [R0]
+    ; PTB2 = UART0_RX (MUX = 2)
+    LDR     R4, =PORTB_PCR2
+    STR     R5, [R4]
 
-    ; PTB2 = UART0_RX
-    LDR  R0, =PORTB_PCR2
-    LDR  R1, =PORT_PCR_SET_PTB2_UART0_RX
-    STR  R1, [R0]
+    ; Baud rate 9600 (48MHz, OSR=16, SBR≈312)
+    LDR     R4, =UART0_BDH
+    MOVS    R5, #0
+    STRB    R5, [R4]
 
-    ; PTB1 = UART0_TX
-    LDR  R0, =PORTB_PCR1
-    LDR  R1, =PORT_PCR_SET_PTB1_UART0_TX
-    STR  R1, [R0]
+    LDR     R4, =UART0_BDL
+    MOVS    R5, #31          ; ≈ 312
+    STRB    R5, [R4]
 
-    ; Disable UART0
-    LDR  R0, =UART0_BASE
-    LDRB R1, [R0,#UART0_C2_OFFSET]
-    BIC  R1, R1, #UART0_C2_T_R
-    STRB R1, [R0,#UART0_C2_OFFSET]
+    ; 8N1 default in C1 = 0
+    LDR     R4, =UART0_C1
+    MOVS    R5, #0
+    STRB    R5, [R4]
 
-    ; Configure 9600 baud, 8N1
-    MOVS R1,#UART0_BDH_9600
-    STRB R1,[R0,#UART0_BDH_OFFSET]
+    ; Enable RX + TX
+    LDR     R4, =UART0_C2
+    MOVS    R5, #4           ; RE
+    MOVS    R1, #8           ; TE
+    ORRS    R5, R5, R1
+    STRB    R5, [R4]
 
-    MOVS R1,#UART0_BDL_9600
-    STRB R1,[R0,#UART0_BDL_OFFSET]
-
-    MOVS R1,#UART0_C1_8N1
-    STRB R1,[R0,#UART0_C1_OFFSET]
-
-    MOVS R1,#UART0_C3_NO_TXINV
-    STRB R1,[R0,#UART0_C3_OFFSET]
-
-    MOVS R1,#UART0_C4_NO_MATCH_OSR_16
-    STRB R1,[R0,#UART0_C4_OFFSET]
-
-    MOVS R1,#UART0_C5_NO_DMA_SSR_SYNC
-    STRB R1,[R0,#UART0_C5_OFFSET]
-
-    MOVS R1,#UART0_S1_CLEAR_FLAGS
-    STRB R1,[R0,#UART0_S1_OFFSET]
-
-    MOVS R1,#UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
-    STRB R1,[R0,#UART0_S2_OFFSET]
-
-    ; Enable UART0 RX + TX
-    MOVS R1,#UART0_C2_T_R
-    STRB R1,[R0,#UART0_C2_OFFSET]
-
-    POP {R0-R7}
+    POP {R1-R5}
     BX  LR
     ENDP
 
 ;---------------------------------------------------------------
 ; PutChar
-; Sends character in R0 via UART0 (polled)
-; Input : R0 = character (ASCII)
+; Input : R0 = ASCII char
 ; Output: none
 ; Registers modified: LR, PC, PSR only
 ;---------------------------------------------------------------
 PutChar PROC
-    PUSH {R1-R3}
-
-    LDR  R1, =UART0_BASE
-    MOVS R2, #UART0_S1_TDRE_MASK
+    PUSH {R1-R2}
 
 Wait_Tx:
-    LDRB R3, [R1,#UART0_S1_OFFSET]
-    ANDS R3, R3, R2
-    BEQ  Wait_Tx
+    LDR     R1, =UART0_S1
+    LDRB    R2, [R1]
+    TST     R2, #0x80        ; TDRE bit 7
+    BEQ     Wait_Tx
 
-    STRB R0, [R1,#UART0_D_OFFSET]
+    LDR     R1, =UART0_D
+    STRB    R0, [R1]
 
-    POP {R1-R3}
+    POP {R1-R2}
     BX  LR
     ENDP
 
 ;---------------------------------------------------------------
 ; GetChar
-; Receives character from UART0 (polled)
 ; Input : none
-; Output: R0 = character (ASCII)
+; Output: R0 = ASCII char
 ; Registers modified: R0, LR, PC, PSR
 ;---------------------------------------------------------------
 GetChar PROC
-    PUSH {R1-R3}
-
-    LDR  R1, =UART0_BASE
-    MOVS R2, #UART0_S1_RDRF_MASK
+    PUSH {R1-R2}
 
 Wait_Rx:
-    LDRB R3, [R1,#UART0_S1_OFFSET]
-    ANDS R3, R3, R2
-    BEQ  Wait_Rx
+    LDR     R1, =UART0_S1
+    LDRB    R2, [R1]
+    TST     R2, #0x20        ; RDRF bit 5
+    BEQ     Wait_Rx
 
-    LDRB R0, [R1,#UART0_D_OFFSET]
+    LDR     R1, =UART0_D
+    LDRB    R0, [R1]
 
-    POP {R1-R3}
+    POP {R1-R2}
     BX  LR
     ENDP
 	
