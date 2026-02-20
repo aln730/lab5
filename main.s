@@ -44,22 +44,27 @@ main
             BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
+        ; Initialize UART0 for polling
         BL      Init_UART0_Polling
 
 MainLoop
+        ; Display prompt
         BL      PutPrompt
-ReadChar
-        BL      GetChar
-        MOVS    R1, R0               ; save original char
 
-        ; lowercase a-z check
+ReadChar
+        ; Read character from UART0
+        BL      GetChar
+        MOVS    R1, R0               ; Save original char for echoing
+
+        ; Convert lowercase a-z to uppercase
         CMP     R0, #'a'
         BLT     CheckCmd
         CMP     R0, #'z'
         BGT     CheckCmd
-        SUBS    R0, R0, #32          ; convert to uppercase
+        SUBS    R0, R0, #32          ; Convert to uppercase
 
 CheckCmd
+        ; Compare to valid commands: C, N, V, Z
         CMP     R0, #'C'
         BEQ     DoC
         CMP     R0, #'N'
@@ -69,9 +74,11 @@ CheckCmd
         CMP     R0, #'Z'
         BEQ     DoZ
 
+        ; Not a valid command, read another char
         B       ReadChar
 
 DoC
+        ; Echo character and call Carry subroutine
         MOVS    R0, R1
         BL      PutChar
         BL      Carry
@@ -95,123 +102,120 @@ DoZ
         BL      Zero
         B       MainLoop
 
+        ; Stay here if somehow exiting MainLoop
+        B       .
 
-;>>>>>   end main program code <<<<<
-;Stay here
-            B       .
-            ENDP    ;main
+        ENDP
 ;>>>>> begin subroutine code <<<<<
-;======================
-; Initialize UART0 (Polling) - Cortex-M0 compatible
-;======================
-Init_UART0_Polling PROC
-    PUSH {R1-R7, LR}
+;>>>>> begin subroutine code <<<<<
+;---------------------------------------
+; Init_UART0_Polling
+; Initializes UART0 for 9600 baud, 8N1, polling mode
+;---------------------------------------
+Init_UART0_Polling
+        PUSH    {R1-R3, LR}
 
-    ; Enable PORTB clock
-    LDR  R1, =0x40048038       ; SIM_SCGC5
-    LDR  R2, [R1]
-    MOVS R3, #1
-    LSL  R3, R3, #10           ; 1 << 10
-    ORR  R2, R2, R3
-    STR  R2, [R1]
+        ; Enable PORTB clock (SIM_SCGC5)
+        LDR     R0, =0x40048038       ; SIM_SCGC5
+        LDR     R1, [R0]
+        MOVS    R2, #1
+        LSL     R2, #10               ; PORTB
+        ORR     R1, R1, R2
+        STR     R1, [R0]
 
-    ; Enable UART0 clock
-    LDR  R1, =0x4004803C       ; SIM_SCGC4
-    LDR  R2, [R1]
-    MOVS R3, #1
-    LSL  R3, R3, #10           ; 1 << 10
-    ORR  R2, R2, R3
-    STR  R2, [R1]
+        ; Enable UART0 clock (SIM_SCGC4)
+        LDR     R0, =0x4004803C       ; SIM_SCGC4
+        LDR     R1, [R0]
+        MOVS    R2, #1
+        LSL     R2, #10               ; UART0
+        ORR     R1, R1, R2
+        STR     R1, [R0]
 
-    ; Configure UART0 transmit/receive source
-    LDR  R1, =0x40048004       ; SIM_SOPT2
-    LDR  R2, [R1]
-    ; Clear bits 26-27
-    MOVS R3, #3
-    LSL  R3, R3, #26
-    BIC  R2, R2, R3
-    ; Set bit 26
-    MOVS R3, #1
-    LSL  R3, R3, #26
-    ORR  R2, R2, R3
-    STR  R2, [R1]
+        ; Configure PORTB pins for UART0
+        LDR     R0, =0x4004A008       ; PORTB_PCR2 (RX)
+        MOVS    R1, #0x102
+        STR     R1, [R0]
 
-    ; Configure PORTB pins (PTB1=RX, PTB2=TX)
-    LDR  R1, =0x4004A004       ; PORTB_PCR1
-    MOVS R2, #2
-    STR  R2, [R1]
+        LDR     R0, =0x4004A004       ; PORTB_PCR1 (TX)
+        MOVS    R1, #0x102
+        STR     R1, [R0]
 
-    LDR  R1, =0x4004A008       ; PORTB_PCR2
-    MOVS R2, #2
-    STR  R2, [R1]
+        ; UART0 base
+        LDR     R0, =0x4006A000
 
-    ; UART0_C1 = 0
-    LDR  R1, =0x4006A002       ; UART0_C1
-    MOVS R2, #0
-    STRB R2, [R1]
+        ; Disable UART0 transmitter and receiver
+        LDRB    R1, [R0,#0x03]        ; C2
+        MOVS    R2, #0x0C              ; TE|RE
+        BIC     R1, R1, R2
+        STRB    R1, [R0,#0x03]
 
-    ; Baud rate 9600
-    LDR  R1, =0x4006A00A       ; UART0_BDH
-    MOVS R2, #0
-    STRB R2, [R1]
+        ; Set baud rate for 9600 (BDH = 0x01, BDL = 0x38)
+        MOVS    R1, #0x01
+        STRB    R1, [R0,#0x00]        ; BDH
+        MOVS    R1, #0x38
+        STRB    R1, [R0,#0x01]        ; BDL
 
-    LDR  R1, =0x4006A00B       ; UART0_BDL
-    MOVS R2, #52
-    STRB R2, [R1]
+        ; 8N1 (default)
+        MOVS    R1, #0x00
+        STRB    R1, [R0,#0x02]        ; C1
+        STRB    R1, [R0,#0x06]        ; C3
+        MOVS    R1, #0x0F
+        STRB    R1, [R0,#0x0A]        ; C4
+        STRB    R1, [R0,#0x0B]        ; C5
 
-    ; UART0_C2: Enable RE and TE
-    LDR  R1, =0x4006A002       ; UART0_C2
-    MOVS R2, #0
-    MOVS R3, #1
-    LSL  R3, R3, #2            ; RE = 1<<2
-    ORR  R2, R2, R3
-    MOVS R3, #1
-    LSL  R3, R3, #3            ; TE = 1<<3
-    ORR  R2, R2, R3
-    STRB R2, [R1]
+        ; Clear status flags
+        MOVS    R1, #0x1F
+        STRB    R1, [R0,#0x04]        ; S1
+        MOVS    R1, #0xC0
+        STRB    R1, [R0,#0x05]        ; S2
 
-    POP {R1-R7, PC}
-ENDP
+        ; Enable UART0 transmitter and receiver
+        MOVS    R1, #0x0C
+        STRB    R1, [R0,#0x03]        ; C2
 
-;======================
-; Get a character from UART0 - Cortex-M0 compatible
-;======================
-GetChar PROC
-    PUSH {R1, LR}
+        POP     {R1-R3, PC}
 
-GC_Wait
-    LDR  R1, =0x4006A004       ; UART0_S1
-    LDRB R2, [R1]
-    MOVS R3, #1
-    LSL  R3, R3, #5            ; RDRF = 1<<5
-    ANDS R2, R2, R3
-    BEQ  GC_Wait
+;---------------------------------------
+; PutChar
+; Sends a single character via UART0 (polling)
+; Input: R0 = character to send
+;---------------------------------------
+PutChar
+        PUSH    {R1, LR}
 
-    LDR  R1, =0x4006A007       ; UART0_D
-    LDRB R0, [R1]
+WAIT_TX:
+        LDR     R1, =0x4006A004       ; UART0_S1
+        LDRB    R2, [R1]
+        MOVS    R3, #0x80              ; TDRE
+        ANDS    R2, R2, R3
+        BEQ     WAIT_TX
 
-    POP {R1, PC}
-ENDP
+        LDR     R1, =0x4006A007       ; UART0_D
+        STRB    R0, [R1]
 
-;======================
-; Send a character via UART0 - Cortex-M0 compatible
-;======================
-PutChar PROC
-    PUSH {R1, LR}
+        POP     {R1, PC}
 
-PC_Wait
-    LDR  R1, =0x4006A004       ; UART0_S1
-    LDRB R2, [R1]
-    MOVS R3, #1
-    LSL  R3, R3, #7            ; TDRE = 1<<7
-    ANDS R2, R2, R3
-    BEQ  PC_Wait
+;---------------------------------------
+; GetChar
+; Receives a single character via UART0 (polling)
+; Output: R0 = received character
+;---------------------------------------
+GetChar
+        PUSH    {R1, LR}
 
-    LDR  R1, =0x4006A007       ; UART0_D
-    STRB R0, [R1]
+WAIT_RX:
+        LDR     R1, =0x4006A004       ; UART0_S1
+        LDRB    R2, [R1]
+        MOVS    R3, #0x20              ; RDRF
+        ANDS    R2, R2, R3
+        BEQ     WAIT_RX
 
-    POP {R1, PC}
-ENDP
+        LDR     R1, =0x4006A007       ; UART0_D
+        LDRB    R0, [R1]
+
+        POP     {R1, PC}
+
+;>>>>>   end subroutine code <<<<<
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
