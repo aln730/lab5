@@ -44,19 +44,18 @@ main
             BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
-        ; Initialize UART0 for polling
         BL      Init_UART0_Polling
 
 MainLoop
-        ; Display prompt
+        ; Print prompt
         BL      PutPrompt
 
 ReadChar
-        ; Read character from UART0
+        ; Read a character from UART0
         BL      GetChar
         MOVS    R1, R0               ; Save original char for echoing
 
-        ; Convert lowercase a-z to uppercase
+        ; Convert lowercase 'a'-'z' to uppercase
         CMP     R0, #'a'
         BLT     CheckCmd
         CMP     R0, #'z'
@@ -64,7 +63,7 @@ ReadChar
         SUBS    R0, R0, #32          ; Convert to uppercase
 
 CheckCmd
-        ; Compare to valid commands: C, N, V, Z
+        ; Compare to commands: C, N, V, Z
         CMP     R0, #'C'
         BEQ     DoC
         CMP     R0, #'N'
@@ -78,7 +77,7 @@ CheckCmd
         B       ReadChar
 
 DoC
-        ; Echo character and call Carry subroutine
+        ; Echo character, call Carry subroutine
         MOVS    R0, R1
         BL      PutChar
         BL      Carry
@@ -102,12 +101,13 @@ DoZ
         BL      Zero
         B       MainLoop
 
-        ; Stay here if somehow exiting MainLoop
+        ; Infinite loop to stay here if needed
         B       .
 
         ENDP
 ;>>>>> begin subroutine code <<<<<
-;>>>>> begin subroutine code <<<<<
+;;>>>>> begin subroutine code <<<<<
+
 ;---------------------------------------
 ; Init_UART0_Polling
 ; Initializes UART0 for 9600 baud, 8N1, polling mode
