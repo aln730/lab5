@@ -105,7 +105,6 @@ do_Z
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-;>>>>> begin subroutine code <<<<<
 ;---------------------------------------------------------------
 ;UART0 Initialization Subroutine
 ;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
@@ -115,7 +114,7 @@ Init_UART0_Polling  PROC
 ;Enable clock for UART0 and PortB
             LDR     R4, =SIM_SCGC4
             LDR     R5, [R4]
-            MOVS    R2, #1           ; temporary small immediate
+            MOVS    R2, #1
             LSLS    R2, R2, #10      ; 1 << 10 for UART0
             ORRS    R5, R5, R2
             STR     R5, [R4]
@@ -137,24 +136,61 @@ Init_UART0_Polling  PROC
             STR     R5, [R4]
 
 ;Set baud rate = 9600
-;Assume 48MHz system clock, oversampling = 16
-;UART0_BDH, UART0_BDL
             LDR     R4, =UART0_BDH
-            MOVS    R5, #0            ; MSB of SBR
+            MOVS    R5, #0
             STRB    R5, [R4]
 
             LDR     R4, =UART0_BDL
-            MOVS    R5, #31           ; LSB of SBR ~ 312 / 0x138
+            MOVS    R5, #31
             STRB    R5, [R4]
 
-;Enable transmitter and receiver (RE | TE = 0x0C)
+;Enable transmitter and receiver (RE|TE = 0x0C)
             LDR     R4, =UART0_C2
-            MOVS    R5, #4            ; 1<<2 = RE
-            MOVS    R2, #8            ; 1<<3 = TE
-            ORRS    R5, R5, R2        ; combine RE|TE
+            MOVS    R5, #4            ; RE = 1<<2
+            MOVS    R2, #8            ; TE = 1<<3
+            ORRS    R5, R5, R2
             STRB    R5, [R4]
 
             POP     {R4-R5}
+            BX      LR
+            ENDP
+
+;---------------------------------------------------------------
+;Polled UART Send Character
+;Input: R0 = character to send
+;Output: none (R0 preserved if desired)
+PutChar  PROC
+            PUSH    {R1}              ; save temp register
+
+Wait_Tx:
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #0x80         ; check TDRE (bit 7)
+            BEQ     Wait_Tx           ; wait if not empty
+
+            LDR     R1, =UART0_D
+            STRB    R0, [R1]          ; write char to data register
+
+            POP     {R1}
+            BX      LR
+            ENDP
+
+;---------------------------------------------------------------
+;Polled UART Read Character
+;Output: R0 = received character
+GetChar  PROC
+            PUSH    {R1}              ; save temp register
+
+Wait_Rx:
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #0x20         ; check RDRF (bit 5)
+            BEQ     Wait_Rx           ; wait if no data
+
+            LDR     R1, =UART0_D
+            LDRB    R0, [R1]          ; read received char
+
+            POP     {R1}
             BX      LR
             ENDP
 ;>>>>>   end subroutine code <<<<<
