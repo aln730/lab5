@@ -44,127 +44,140 @@ main
             BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
-            BL      Init_UART0_Polling   ; Initialize UART0
+BL      Init_UART0_Polling     ; initialize UART0
 
 MainLoop
-            BL      PutPrompt            ; Display prompt
-            BL      GetChar              ; Read char into R0
+        BL      PutPrompt             
+ReadChar
+        BL      GetChar               ; R0 = input char
+        MOV     R1, R0                ; save original char
 
-            MOV     R4, R0               ; Save original char
-            MOV     R1, R0
-            CMP     R1, #'a'
-            BLT     SkipUpperConvert
-            CMP     R1, #'z'
-            BGT     SkipUpperConvert
-            SUB     R1, R1, #32         ; Convert to uppercase
-SkipUpperConvert
+        ; check lowercase a-z
+        CMP     R0, #'a'
+        BLT     CheckCmd
+        CMP     R0, #'z'
+        BGT     CheckCmd
+        SUB     R0, R0, #32            ; convert to uppercase
 
-            CMP     R1, #'C'
-            BEQ     CallCarry
-            CMP     R1, #'N'
-            BEQ     CallNegative
-            CMP     R1, #'V'
-            BEQ     CallOverflow
-            CMP     R1, #'Z'
-            BEQ     CallZero
-            B       MainLoop             ; Not valid, repeat
+CheckCmd
+        CMP     R0, #'C'
+        BEQ     DoC
+        CMP     R0, #'N'
+        BEQ     DoN
+        CMP     R0, #'V'
+        BEQ     DoV
+        CMP     R0, #'Z'
+        BEQ     DoZ
 
-CallCarry
-            MOV     R0, R4               ; Restore original char
-            BL      PutChar
-            BL      Carry
-            B       MainLoop
+        B       ReadChar              
 
-CallNegative
-            MOV     R0, R4
-            BL      PutChar
-            BL      Negative
-            B       MainLoop
+DoC
+        MOV     R0, R1
+        BL      PutChar
+        BL      Carry
+        B       MainLoop
 
-CallOverflow
-            MOV     R0, R4
-            BL      PutChar
-            BL      Overflow
-            B       MainLoop
+DoN
+        MOV     R0, R1
+        BL      PutChar
+        BL      Negative
+        B       MainLoop
 
-CallZero
-            MOV     R0, R4
-            BL      PutChar
-            BL      Zero
-            B       MainLoop
+DoV
+        MOV     R0, R1
+        BL      PutChar
+        BL      Overflow
+        B       MainLoop
+
+DoZ
+        MOV     R0, R1
+        BL      PutChar
+        BL      Zero
+        B       MainLoop
+
 ;>>>>>   end main program code <<<<<
 ;Stay here
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-Init_UART0_Polling PROC
-            LDR     R0, =SIM_SCGC4
-            LDR     R1, [R0]
-            ORR     R1, R1, #0x400         ; Enable UART0 clock (1<<10)
-            STR     R1, [R0]
+Init_UART0_Polling
+        PUSH    {R1-R7, LR}
 
-            LDR     R0, =SIM_SCGC5
-            LDR     R1, [R0]
-            ORR     R1, R1, #0x400         ; Enable PORTB clock (1<<10)
-            STR     R1, [R0]
+        LDR     R1, =0x40048038        ; SIM_SCGC5
+        LDR     R2, [R1]
+        ORR     R2, R2, #(1<<10)       ; PORTB clock
+        STR     R2, [R1]
 
-            ; Configure PORTB pins 1 (TX) and 2 (RX)
-            LDR     R0, =PORTB_PCR1
-            MOV     R1, #0x20              ; MUX=2 for UART0_TX
-            STR     R1, [R0]
-            LDR     R0, =PORTB_PCR2
-            MOV     R1, #0x20              ; MUX=2 for UART0_RX
-            STR     R1, [R0]
+        LDR     R1, =0x4004803C        ; SIM_SCGC4
+        LDR     R2, [R1]
+        ORR     R2, R2, #(1<<10)       ; UART0 clock
+        STR     R2, [R1]
 
-            ; UART0 baud 9600 @48MHz
-            LDR     R0, =UART0_BDH
-            MOV     R1, #0
-            STR     R1, [R0]
-            LDR     R0, =UART0_BDL
-            MOV     R1, #52                 ; BDL = 48MHz/(16*9600)
-            STR     R1, [R0]
+        LDR     R1, =0x40048004        ; SIM_SOPT2
+        LDR     R2, [R1]
+        BIC     R2, R2, #(3<<26)
+        ORR     R2, R2, #(1<<26)
+        STR     R2, [R1]
 
-            ; Enable transmitter and receiver
-            LDR     R0, =UART0_C2
-            MOV     R1, #0xC                ; RE=1, TE=1 -> 0b1100
-            STR     R1, [R0]
+        LDR     R1, =0x4004A004        
+        MOVS    R2, #2
+        STR     R2, [R1]
 
-            BX      LR
-            ENDP
+        LDR     R1, =0x4004A008        
+        MOVS    R2, #2
+        STR     R2, [R1]
 
-;----------------------------------------
-;GetChar: Reads one character from UART0
-; Input: none
-; Output: R0 = received char
-; Clobbers: R0, R1, R2
-;----------------------------------------
-GetChar  PROC
-PollRX
-            LDR     R1, =UART0_S1
-            LDR     R2, [R1]
-            ANDS    R2, R2, #0x20          ; Check RDRF (bit 5)
-            BEQ     PollRX
-            LDR     R0, =UART0_D
-            LDRB    R0, [R0]
-            BX      LR
-            ENDP
+        LDR     R1, =0x4006A002        
+        MOVS    R2, #0
+        STRB    R2, [R1]
 
-;----------------------------------------
-;PutChar: Sends one character to UART0
-; Input: R0 = char to send
-; Output: none
-; Clobbers: R1, R2
-;----------------------------------------
-PutChar  PROC
-PollTX
-            LDR     R1, =UART0_S1
-            LDR     R2, [R1]
-            ANDS    R2, R2, #0x80          ; Check TDRE (bit 7)
-            BEQ     PollTX
-            LDR     R1, =UART0_D
-            STRB    R0, [R1]
-            BX      LR
-            ENDP
+        ; Baud 9600
+        LDR     R1, =0x4006A00A        ; UART0_BDH
+        MOVS    R2, #0x01
+        STRB    R2, [R1]
+
+        LDR     R1, =0x4006A00B        ; UART0_BDL
+        MOVS    R2, #0x38
+        STRB    R2, [R1]
+
+        LDR     R1, =0x4006A006        
+        MOVS    R2, #0x00            
+        STRB    R2, [R1]
+
+        LDR     R1, =0x4006A002        ; UART0_C2
+        MOVS    R2, #(1<<2)|(1<<3)    
+        STRB    R2, [R1]
+
+        POP     {R1-R7, PC}
+
+GetChar
+        PUSH    {R1, LR}
+
+GC_Wait
+        LDR     R1, =0x4006A004        ; UART0_S1
+        LDRB    R2, [R1]
+        TST     R2, #(1<<5)           ; RDRF
+        BEQ     GC_Wait
+
+        LDR     R1, =0x4006A007        ; UART0_D
+        LDRB    R0, [R1]
+
+        POP     {R1, PC}
+
+PutChar
+        PUSH    {R1, LR}
+
+PC_Wait
+        LDR     R1, =0x4006A004        ; UART0_S1
+        LDRB    R2, [R1]
+        TST     R2, #(1<<7)           
+        BEQ     PC_Wait
+
+        LDR     R1, =0x4006A007        ; UART0_D
+        STRB    R0, [R1]
+
+        POP     {R1, PC}
+
 ;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
