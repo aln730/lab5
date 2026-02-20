@@ -112,7 +112,6 @@ do_Z
             B       .
             ENDP    ;main
 ;>>>>> begin subroutine code <<<<<
-;>>>>> begin subroutine code <<<<<
 ;---------------------------------------------------------------
 ;UART0 Initialization Subroutine
 ;8N1 format, 9600 baud, uses port B pins 1 (TX) and 2 (RX)
@@ -162,6 +161,45 @@ Init_UART0_Polling  PROC
             STRB    R5, [R4]
 
             POP     {R4-R5}
+            BX      LR
+            ENDP
+
+;---------------------------------------------------------------
+;Polled UART Send Character
+;Input: R0 = character to send
+;Output: none
+PutChar  PROC
+            PUSH    {R1}              ; save temp register
+
+Wait_Tx:
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #0x80         ; check TDRE (bit 7)
+            BEQ     Wait_Tx           ; wait if not empty
+
+            LDR     R1, =UART0_D
+            STRB    R0, [R1]          ; write char to data register
+
+            POP     {R1}
+            BX      LR
+            ENDP
+
+;---------------------------------------------------------------
+;Polled UART Read Character
+;Output: R0 = received character
+GetChar  PROC
+            PUSH    {R1}              ; save temp register
+
+Wait_Rx:
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #0x20         ; check RDRF (bit 5)
+            BEQ     Wait_Rx           ; wait if no data
+
+            LDR     R1, =UART0_D
+            LDRB    R0, [R1]          ; read received char
+
+            POP     {R1}
             BX      LR
             ENDP
 ;>>>>>   end subroutine code <<<<<
