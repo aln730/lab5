@@ -26,179 +26,170 @@
             AREA    MyCode,CODE,READONLY
             ENTRY
             EXPORT  Reset_Handler
-			IMPORT  Startup
-;--------------------------------------------------------------------				
-			EXPORT  PutChar
-			IMPORT  Negative 
-			IMPORT  Overflow 
-			IMPORT  PutPrompt 
-			IMPORT  Zero
-			IMPORT  Carry
+            IMPORT  Startup
 Reset_Handler  PROC  {}
 main
-
-Reset_Handler  PROC {}
-main
+;---------------------------------------------------------------
+;Mask interrupts
             CPSID   I
-            BL      Startup                 ; KL05 system init
+;KL05 system startup with 48-MHz system clock
+            BL      Startup
+;---------------------------------------------------------------
+;>>>>> begin main program code <<<<<
 
             BL      Init_UART0_Polling
-command_loop
 
+MainLoop
             BL      PutPrompt
-			
-            BL      GetChar                 ; R0 = typed char
 
+GetInput
+            BL      GetChar          ; R0 = typed character
+            MOV     R1, R0           ; save original character
 
-            MOV     R1, R0                  ; R1 = working copy
+; check if lowercase (a–z)
+            CMP     R0, #'a'
+            BLT     CheckUpper
+            CMP     R0, #'z'
+            BGT     CheckUpper
+            SUB     R0, R0, #32      ; convert to uppercase
 
-            CMP     R1, #'a'
-            BLT     not_lower
-            CMP     R1, #'z'
-            BGT     not_lower
-            SUBS    R1, R1, #32              ; convert to uppercase
+CheckUpper
+            CMP     R0, #'C'
+            BEQ     CmdC
+            CMP     R0, #'N'
+            BEQ     CmdN
+            CMP     R0, #'V'
+            BEQ     CmdV
+            CMP     R0, #'Z'
+            BEQ     CmdZ
 
-not_lower
-            CMP     R1, #'C'
-            BEQ     cmd_C
-            CMP     R1, #'N'
-            BEQ     cmd_N
-            CMP     R1, #'V'
-            BEQ     cmd_V
-            CMP     R1, #'Z'
-            BEQ     cmd_Z
+            B       GetInput         ; invalid → try again
 
-            B       command_loop             ; invalid → try again
-
-
-cmd_C
-            BL      PutChar                  ; echo typed char
+CmdC
+            MOV     R0, R1
+            BL      PutChar
             BL      Carry
-            B       command_loop
+            B       MainLoop
 
-cmd_N
+CmdN
+            MOV     R0, R1
             BL      PutChar
             BL      Negative
-            B       command_loop
+            B       MainLoop
 
-cmd_V
+CmdV
+            MOV     R0, R1
             BL      PutChar
             BL      Overflow
-            B       command_loop
+            B       MainLoop
 
-cmd_Z
+CmdZ
+            MOV     R0, R1
             BL      PutChar
             BL      Zero
-            B       command_loop
+            B       MainLoop
 
+;>>>>>   end main program code <<<<<
+;Stay here
             B       .
-            ENDP
+            ENDP    ;main
+
+;>>>>> begin subroutine code <<<<<
+
 ;---------------------------------------------------------------
 ; Init_UART0_Polling
-; UART0 init for KL05Z
-; 9600 baud, 8N1, PTB1=TX, PTB2=RX
-; Input : none
-; Output: none
-; Registers modified: LR, PC, PSR only
 ;---------------------------------------------------------------
-Init_UART0_Polling  PROC
-    PUSH {R1-R5}
+Init_UART0_Polling
+            PUSH    {R0-R3,LR}
 
-    ; Enable UART0 clock (SIM_SCGC4 bit 10)
-    LDR     R4, =SIM_SCGC4
-    LDR     R5, [R4]
-    MOVS    R1, #1
-    LSLS    R1, R1, #10
-    ORRS    R5, R5, R1
-    STR     R5, [R4]
+; Enable clocks for UART0 and PORTB
+            LDR     R0, =SIM_SCGC4
+            LDR     R1, [R0]
+            ORR     R1, R1, #SIM_SCGC4_UART0_MASK
+            STR     R1, [R0]
 
-    ; Enable PORTB clock (SIM_SCGC5 bit 10)
-    LDR     R4, =SIM_SCGC5
-    LDR     R5, [R4]
-    MOVS    R1, #1
-    LSLS    R1, R1, #10
-    ORRS    R5, R5, R1
-    STR     R5, [R4]
+            LDR     R0, =SIM_SCGC5
+            LDR     R1, [R0]
+            ORR     R1, R1, #SIM_SCGC5_PORTB_MASK
+            STR     R1, [R0]
 
-    ; PTB1 = UART0_TX (MUX = 2)
-    LDR     R4, =PORTB_PCR1
-    MOVS    R5, #2
-    LSLS    R5, R5, #8
-    STR     R5, [R4]
+; Select MCGFLLCLK for UART0
+            LDR     R0, =SIM_SOPT2
+            LDR     R1, [R0]
+            BIC     R1, R1, #SIM_SOPT2_UART0SRC_MASK
+            ORR     R1, R1, #(1 << SIM_SOPT2_UART0SRC_SHIFT)
+            STR     R1, [R0]
 
-    ; PTB2 = UART0_RX (MUX = 2)
-    LDR     R4, =PORTB_PCR2
-    STR     R5, [R4]
+; Set PORTB pins 1 and 2 to UART function (ALT2)
+            LDR     R0, =PORTB_PCR1
+            MOVS    R1, #(2 << PORT_PCR_MUX_SHIFT)
+            STR     R1, [R0]
 
-    ; Baud rate 9600 (48MHz, OSR=16, SBR≈312)
-    LDR     R4, =UART0_BDH
-    MOVS    R5, #0
-    STRB    R5, [R4]
+            LDR     R0, =PORTB_PCR2
+            MOVS    R1, #(2 << PORT_PCR_MUX_SHIFT)
+            STR     R1, [R0]
 
-    LDR     R4, =UART0_BDL
-    MOVS    R5, #31          ; ≈ 312
-    STRB    R5, [R4]
+; Disable UART0 before config
+            LDR     R0, =UART0_C2
+            MOVS    R1, #0
+            STRB    R1, [R0]
 
-    ; 8N1 default in C1 = 0
-    LDR     R4, =UART0_C1
-    MOVS    R5, #0
-    STRB    R5, [R4]
+; Set baud rate = 9600 (SBR = 0x0138)
+            LDR     R0, =UART0_BDH
+            MOVS    R1, #0x01
+            STRB    R1, [R0]
 
-    ; Enable RX + TX
-    LDR     R4, =UART0_C2
-    MOVS    R5, #4           ; RE
-    MOVS    R1, #8           ; TE
-    ORRS    R5, R5, R1
-    STRB    R5, [R4]
+            LDR     R0, =UART0_BDL
+            MOVS    R1, #0x38
+            STRB    R1, [R0]
 
-    POP {R1-R5}
-    BX  LR
-    ENDP
+; 8N1 configuration
+            LDR     R0, =UART0_C1
+            MOVS    R1, #0
+            STRB    R1, [R0]
+
+; Enable transmitter and receiver
+            LDR     R0, =UART0_C2
+            MOVS    R1, #(UART0_C2_TE_MASK | UART0_C2_RE_MASK)
+            STRB    R1, [R0]
+
+            POP     {R0-R3,PC}
 
 ;---------------------------------------------------------------
-; PutChar
-; Input : R0 = ASCII char
-; Output: none
-; Registers modified: LR, PC, PSR only
+; GetChar  → R0 = received character
 ;---------------------------------------------------------------
-PutChar         PROC
-                PUSH {R1-R3, LR}
+GetChar
+            PUSH    {R1,LR}
 
-                LDR  R1, =UART0_BASE
+WaitRx
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #UART0_S1_RDRF_MASK
+            BEQ     WaitRx
 
-PollTx          
-                LDRB R3, [R1, #UART0_S1_OFFSET]     ; read status
-                MOVS R2, #UART0_S1_TDRE_MASK        ; mask
-                ANDS R3, R3, R2
-                BEQ  PollTx                         ; wait until TDRE=1
+            LDR     R1, =UART0_D
+            LDRB    R0, [R1]
 
-                STRB R0, [R1, #UART0_D_OFFSET]      ; write data
-
-                POP  {R1-R3, PC}
-                ENDP
+            POP     {R1,PC}
 
 ;---------------------------------------------------------------
-; GetChar
-; Input : none
-; Output: R0 = ASCII char
-; Registers modified: R0, LR, PC, PSR
+; PutChar  (R0 = character to send)
 ;---------------------------------------------------------------
-GetChar         PROC
-                PUSH {R1-R3, LR}
+PutChar
+            PUSH    {R1-R2,LR}
 
-                LDR  R1, =UART0_BASE
+WaitTx
+            LDR     R1, =UART0_S1
+            LDRB    R2, [R1]
+            TST     R2, #UART0_S1_TDRE_MASK
+            BEQ     WaitTx
 
-PollRx          
-                LDRB R3, [R1, #UART0_S1_OFFSET]     ; read status
-                MOVS R2, #UART0_S1_RDRF_MASK        ; mask
-                ANDS R3, R3, R2
-                BEQ  PollRx                         ; wait until RDRF=1
+            LDR     R1, =UART0_D
+            STRB    R0, [R1]
 
-                LDRB R0, [R1, #UART0_D_OFFSET]      ; read data into R0
+            POP     {R1-R2,PC}
 
-                POP  {R1-R3, PC}
-                ENDP
-	
+;>>>>>   end subroutine code <<<<<
             ALIGN
 ;****************************************************************
 ;Vector Table Mapped to Address 0 at Reset
