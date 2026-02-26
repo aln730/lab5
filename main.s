@@ -46,95 +46,101 @@ GetInput
             BL      GetChar          ; R0 = typed character
             MOV     R1, R0           ; save original character
 
-; check if lowercase (a–z)
+; check for lowercase a–z
             CMP     R0, #'a'
-            BLT     CheckUpper
+            BLT     CheckCmd
             CMP     R0, #'z'
-            BGT     CheckUpper
-            SUB     R0, R0, #32      ; convert to uppercase
+            BGT     CheckCmd
+            SUBS    R0, R0, #32      ; convert to uppercase
 
-CheckUpper
+CheckCmd
             CMP     R0, #'C'
-            BEQ     CmdC
+            BEQ     DoC
             CMP     R0, #'N'
-            BEQ     CmdN
+            BEQ     DoN
             CMP     R0, #'V'
-            BEQ     CmdV
+            BEQ     DoV
             CMP     R0, #'Z'
-            BEQ     CmdZ
+            BEQ     DoZ
 
             B       GetInput         ; invalid → try again
 
-CmdC
+DoC
             MOV     R0, R1
             BL      PutChar
             BL      Carry
             B       MainLoop
 
-CmdN
+DoN
             MOV     R0, R1
             BL      PutChar
             BL      Negative
             B       MainLoop
 
-CmdV
+DoV
             MOV     R0, R1
             BL      PutChar
             BL      Overflow
             B       MainLoop
 
-CmdZ
+DoZ
             MOV     R0, R1
             BL      PutChar
             BL      Zero
             B       MainLoop
 
 ;>>>>>   end main program code <<<<<
-;Stay here
-            B       .
-            ENDP    ;main
 
 ;>>>>> begin subroutine code <<<<<
 
 ;---------------------------------------------------------------
-; Init_UART0_Polling
+; Init_UART0_Polling  (9600 baud, 8N1)
 ;---------------------------------------------------------------
 Init_UART0_Polling
             PUSH    {R0-R3,LR}
 
-; Enable clocks for UART0 and PORTB
+; Enable UART0 clock
             LDR     R0, =SIM_SCGC4
             LDR     R1, [R0]
-            ORR     R1, R1, #SIM_SCGC4_UART0_MASK
+            MOVS    R2, #0x04            ; UART0 mask bit
+            LSLS    R2, R2, #10          ; shift into position
+            ORRS    R1, R2
             STR     R1, [R0]
 
+; Enable PORTB clock
             LDR     R0, =SIM_SCGC5
             LDR     R1, [R0]
-            ORR     R1, R1, #SIM_SCGC5_PORTB_MASK
+            MOVS    R2, #0x01
+            LSLS    R2, R2, #10
+            ORRS    R1, R2
             STR     R1, [R0]
 
-; Select MCGFLLCLK for UART0
+; Select MCGFLLCLK for UART0 (UART0SRC = 01)
             LDR     R0, =SIM_SOPT2
             LDR     R1, [R0]
-            BIC     R1, R1, #SIM_SOPT2_UART0SRC_MASK
-            ORR     R1, R1, #(1 << SIM_SOPT2_UART0SRC_SHIFT)
+            MOVS    R2, #1
+            LSLS    R2, R2, #26
+            ORRS    R1, R2
             STR     R1, [R0]
 
-; Set PORTB pins 1 and 2 to UART function (ALT2)
+; Set PORTB_PCR1 to ALT2 (TX)
             LDR     R0, =PORTB_PCR1
-            MOVS    R1, #(2 << PORT_PCR_MUX_SHIFT)
+            MOVS    R1, #2
+            LSLS    R1, R1, #8
             STR     R1, [R0]
 
+; Set PORTB_PCR2 to ALT2 (RX)
             LDR     R0, =PORTB_PCR2
-            MOVS    R1, #(2 << PORT_PCR_MUX_SHIFT)
+            MOVS    R1, #2
+            LSLS    R1, R1, #8
             STR     R1, [R0]
 
-; Disable UART0 before config
+; Disable UART0
             LDR     R0, =UART0_C2
             MOVS    R1, #0
             STRB    R1, [R0]
 
-; Set baud rate = 9600 (SBR = 0x0138)
+; Set baud rate SBR = 0x0138 (9600 baud @ 48 MHz)
             LDR     R0, =UART0_BDH
             MOVS    R1, #0x01
             STRB    R1, [R0]
@@ -143,51 +149,53 @@ Init_UART0_Polling
             MOVS    R1, #0x38
             STRB    R1, [R0]
 
-; 8N1 configuration
+; 8N1 (default)
             LDR     R0, =UART0_C1
             MOVS    R1, #0
             STRB    R1, [R0]
 
-; Enable transmitter and receiver
+; Enable TE and RE
             LDR     R0, =UART0_C2
-            MOVS    R1, #(UART0_C2_TE_MASK | UART0_C2_RE_MASK)
+            MOVS    R1, #0x0C           ; TE=1 (bit3), RE=1 (bit2)
             STRB    R1, [R0]
 
             POP     {R0-R3,PC}
 
 ;---------------------------------------------------------------
-; GetChar  → R0 = received character
+; GetChar  → returns character in R0
 ;---------------------------------------------------------------
 GetChar
-            PUSH    {R1,LR}
+            PUSH    {R1,R2,LR}
 
 WaitRx
             LDR     R1, =UART0_S1
             LDRB    R2, [R1]
-            TST     R2, #UART0_S1_RDRF_MASK
+            MOVS    R1, #0x20           ; RDRF mask
+            TST     R2, R1
             BEQ     WaitRx
 
             LDR     R1, =UART0_D
             LDRB    R0, [R1]
 
-            POP     {R1,PC}
+            POP     {R1,R2,PC}
 
 ;---------------------------------------------------------------
-; PutChar  (R0 = character to send)
+; PutChar  (R0 = character)
 ;---------------------------------------------------------------
 PutChar
-            PUSH    {R1-R2,LR}
+            PUSH    {R1,R2,LR}
 
 WaitTx
             LDR     R1, =UART0_S1
             LDRB    R2, [R1]
-            TST     R2, #UART0_S1_TDRE_MASK
+            MOVS    R1, #0x80           ; TDRE mask
+            TST     R2, R1
             BEQ     WaitTx
 
             LDR     R1, =UART0_D
             STRB    R0, [R1]
 
-            POP     {R1-R2,PC}
+            POP     {R1,R2,PC}
 
 ;>>>>>   end subroutine code <<<<<
             ALIGN
