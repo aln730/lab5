@@ -1,57 +1,65 @@
-            TTL Program Title for Listing Header Goes Here
+            TTL Lab Exercise Five: APSR Glossary
 ;****************************************************************
-;Descriptive comment header goes here.
-;(What does the program do?)
-;Name:  <Your name here>
-;Date:  <Date completed here>
-;Class:  CMPE-250
-;Section:  <Your lab section, day, and time here>
-;---------------------------------------------------------------
-;Keil Template for KL05
-;R. W. Melton
-;September 13, 2020
+;Polled Serial I/O using UART0 on KL05Z
+;Inputs characters from terminal and prints APSR glossary
+;Name:  Arnav Gawas
+;Date:  March 20, 2026
+;Class: CMPE-250
+;Section: All sections
 ;****************************************************************
-;Assembler directives
             THUMB
-            OPT    64  ;Turn on listing macro expansions
-;****************************************************************
-;Include files
-            GET  MKL05Z4.s     ;Included by start.s
-            OPT  1   ;Turn on listing
-;****************************************************************
-;EQUates
-;****************************************************************
-;Program
-;Linker requires Reset_Handler
+            OPT 64
+            GET  MKL05Z4.s
+            OPT 1
+
+;---------------------------------------------------------------
+;EQUATES
+CR          EQU 0x0D
+LF          EQU 0x0A
+NULL        EQU 0x00
+
+;UART0 registers (KL05 manual)
+SIM_SCGC4   EQU 0x40048034
+SIM_SCGC5   EQU 0x40048038
+SIM_SOPT2   EQU 0x40048004
+PORTB_PCR1  EQU 0x4004A004
+PORTB_PCR2  EQU 0x4004A008
+UART0_BDH   EQU 0x4006A000
+UART0_BDL   EQU 0x4006A001
+UART0_C1    EQU 0x4006A002
+UART0_C2    EQU 0x4006A003
+UART0_S1    EQU 0x4006A004
+UART0_D     EQU 0x4006A007
+
+;---------------------------------------------------------------
             AREA    MyCode,CODE,READONLY
             ENTRY
             EXPORT  Reset_Handler
             IMPORT  Startup
-Reset_Handler  PROC  {}
-main
-;---------------------------------------------------------------
-;Mask interrupts
-            CPSID   I
-;KL05 system startup with 48-MHz system clock
-            BL      Startup
-;---------------------------------------------------------------
-;>>>>> begin main program code <<<<<
+            IMPORT  PutPrompt
+            IMPORT  Carry
+            IMPORT  Negative
+            IMPORT  Overflow
+            IMPORT  Zero
 
+;---------------------------------------------------------------
+Reset_Handler  PROC
+            CPSID   I               ; Mask interrupts
+            BL      Startup         ; KL05 startup, 48 MHz
             BL      Init_UART0_Polling
-
 MainLoop
             BL      PutPrompt
 
 GetInput
-            BL      GetChar          ; R0 = typed character
-            MOV     R1, R0           ; save original character
+            BL      GetChar         ; R0 = typed char
+            MOV     R1, R0          ; save original char
 
-; check for lowercase a–z
+; Convert lowercase a-z to uppercase
             CMP     R0, #'a'
             BLT     CheckCmd
             CMP     R0, #'z'
             BGT     CheckCmd
-            SUBS    R0, R0, #32      ; convert to uppercase
+            SUBS    R0, R0, #32     ; 'a' → 'A'
 
 CheckCmd
             CMP     R0, #'C'
@@ -63,7 +71,7 @@ CheckCmd
             CMP     R0, #'Z'
             BEQ     DoZ
 
-            B       GetInput         ; invalid → try again
+            B       GetInput        ; invalid → retry
 
 DoC
             MOV     R0, R1
@@ -88,198 +96,97 @@ DoZ
             BL      PutChar
             BL      Zero
             B       MainLoop
-
-;>>>>>   end main program code <<<<<
-
-;>>>>> begin subroutine code <<<<<
+            ENDP
 
 ;---------------------------------------------------------------
-; Init_UART0_Polling  (9600 baud, 8N1)
+; UART Initialization for 9600 baud, 8N1
 ;---------------------------------------------------------------
 Init_UART0_Polling
             PUSH    {R0-R3,LR}
 
-; Enable UART0 clock
+; Enable UART0 clock (bit 10 in SCGC4)
             LDR     R0, =SIM_SCGC4
             LDR     R1, [R0]
-            MOVS    R2, #0x04            ; UART0 mask bit
-            LSLS    R2, R2, #10          ; shift into position
-            ORRS    R1, R2
+            ORR     R1, R1, #(1 << 10)
             STR     R1, [R0]
 
-; Enable PORTB clock
+; Enable PORTB clock (bit 10 in SCGC5)
             LDR     R0, =SIM_SCGC5
             LDR     R1, [R0]
-            MOVS    R2, #0x01
-            LSLS    R2, R2, #10
-            ORRS    R1, R2
+            ORR     R1, R1, #(1 << 10)
             STR     R1, [R0]
 
-; Select MCGFLLCLK for UART0 (UART0SRC = 01)
+; Select MCGFLLCLK for UART0
             LDR     R0, =SIM_SOPT2
             LDR     R1, [R0]
-            MOVS    R2, #1
-            LSLS    R2, R2, #26
-            ORRS    R1, R2
+            ORR     R1, R1, #(1 << 26) ; UART0SRC = 01
             STR     R1, [R0]
 
-; Set PORTB_PCR1 to ALT2 (TX)
+; PORTB1 = ALT2 (TX)
             LDR     R0, =PORTB_PCR1
-            MOVS    R1, #2
+            MOV     R1, #2
             LSLS    R1, R1, #8
             STR     R1, [R0]
 
-; Set PORTB_PCR2 to ALT2 (RX)
+; PORTB2 = ALT2 (RX)
             LDR     R0, =PORTB_PCR2
-            MOVS    R1, #2
+            MOV     R1, #2
             LSLS    R1, R1, #8
             STR     R1, [R0]
 
 ; Disable UART0
             LDR     R0, =UART0_C2
-            MOVS    R1, #0
+            MOV     R1, #0
             STRB    R1, [R0]
 
-; Set baud rate SBR = 0x0138 (9600 baud @ 48 MHz)
+; Set baud rate 9600 @ 48 MHz
             LDR     R0, =UART0_BDH
-            MOVS    R1, #0x01
+            MOV     R1, #0x01
             STRB    R1, [R0]
-
             LDR     R0, =UART0_BDL
-            MOVS    R1, #0x38
+            MOV     R1, #0x38
             STRB    R1, [R0]
 
-; 8N1 (default)
+; 8N1 (C1 = 0)
             LDR     R0, =UART0_C1
-            MOVS    R1, #0
+            MOV     R1, #0
             STRB    R1, [R0]
 
-; Enable TE and RE
+; Enable transmitter and receiver
             LDR     R0, =UART0_C2
-            MOVS    R1, #0x0C           ; TE=1 (bit3), RE=1 (bit2)
+            MOV     R1, #0x0C       ; TE=1, RE=1
             STRB    R1, [R0]
 
             POP     {R0-R3,PC}
 
 ;---------------------------------------------------------------
-; GetChar  → returns character in R0
+; GetChar: read character from UART0 into R0
 ;---------------------------------------------------------------
 GetChar
             PUSH    {R1,R2,LR}
-
 WaitRx
             LDR     R1, =UART0_S1
             LDRB    R2, [R1]
-            MOVS    R1, #0x20           ; RDRF mask
+            MOVS    R1, #0x20       ; RDRF mask
             TST     R2, R1
             BEQ     WaitRx
-
             LDR     R1, =UART0_D
             LDRB    R0, [R1]
-
             POP     {R1,R2,PC}
 
 ;---------------------------------------------------------------
-; PutChar  (R0 = character)
+; PutChar: write character in R0 to UART0
 ;---------------------------------------------------------------
 PutChar
             PUSH    {R1,R2,LR}
-
 WaitTx
             LDR     R1, =UART0_S1
             LDRB    R2, [R1]
-            MOVS    R1, #0x80           ; TDRE mask
+            MOVS    R1, #0x80       ; TDRE mask
             TST     R2, R1
             BEQ     WaitTx
-
             LDR     R1, =UART0_D
             STRB    R0, [R1]
-
             POP     {R1,R2,PC}
-
-;>>>>>   end subroutine code <<<<<
-            ALIGN
-;****************************************************************
-;Vector Table Mapped to Address 0 at Reset
-;Linker requires __Vectors to be exported
-            AREA    RESET, DATA, READONLY
-            EXPORT  __Vectors
-            EXPORT  __Vectors_End
-            EXPORT  __Vectors_Size
-            IMPORT  __initial_sp
-            IMPORT  Dummy_Handler
-            IMPORT  HardFault_Handler
-__Vectors 
-                                      ;ARM core vectors
-            DCD    __initial_sp       ;00:end of stack
-            DCD    Reset_Handler      ;01:reset vector
-            DCD    Dummy_Handler      ;02:NMI
-            DCD    HardFault_Handler  ;03:hard fault
-            DCD    Dummy_Handler      ;04:(reserved)
-            DCD    Dummy_Handler      ;05:(reserved)
-            DCD    Dummy_Handler      ;06:(reserved)
-            DCD    Dummy_Handler      ;07:(reserved)
-            DCD    Dummy_Handler      ;08:(reserved)
-            DCD    Dummy_Handler      ;09:(reserved)
-            DCD    Dummy_Handler      ;10:(reserved)
-            DCD    Dummy_Handler      ;11:SVCall (supervisor call)
-            DCD    Dummy_Handler      ;12:(reserved)
-            DCD    Dummy_Handler      ;13:(reserved)
-            DCD    Dummy_Handler      ;14:PendSV (PendableSrvReq)
-                                      ;   pendable request 
-                                      ;   for system service)
-            DCD    Dummy_Handler      ;15:SysTick (system tick timer)
-            DCD    Dummy_Handler      ;16:DMA channel 0 transfer 
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;17:DMA channel 1 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;18:DMA channel 2 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;19:DMA channel 3 transfer
-                                      ;   complete/error
-            DCD    Dummy_Handler      ;20:(reserved)
-            DCD    Dummy_Handler      ;21:FTFA command complete/
-                                      ;   read collision
-            DCD    Dummy_Handler      ;22:low-voltage detect;
-                                      ;   low-voltage warning
-            DCD    Dummy_Handler      ;23:low leakage wakeup
-            DCD    Dummy_Handler      ;24:I2C0
-            DCD    Dummy_Handler      ;25:(reserved)
-            DCD    Dummy_Handler      ;26:SPI0
-            DCD    Dummy_Handler      ;27:(reserved)
-            DCD    Dummy_Handler      ;28:UART0 (status; error)
-            DCD    Dummy_Handler      ;29:(reserved)
-            DCD    Dummy_Handler      ;30:(reserved)
-            DCD    Dummy_Handler      ;31:ADC0
-            DCD    Dummy_Handler      ;32:CMP0
-            DCD    Dummy_Handler      ;33:TPM0
-            DCD    Dummy_Handler      ;34:TPM1
-            DCD    Dummy_Handler      ;35:(reserved)
-            DCD    Dummy_Handler      ;36:RTC (alarm)
-            DCD    Dummy_Handler      ;37:RTC (seconds)
-            DCD    Dummy_Handler      ;38:PIT
-            DCD    Dummy_Handler      ;39:(reserved)
-            DCD    Dummy_Handler      ;40:(reserved)
-            DCD    Dummy_Handler      ;41:DAC0
-            DCD    Dummy_Handler      ;42:TSI0
-            DCD    Dummy_Handler      ;43:MCG
-            DCD    Dummy_Handler      ;44:LPTMR0
-            DCD    Dummy_Handler      ;45:(reserved)
-            DCD    Dummy_Handler      ;46:PORTA
-            DCD    Dummy_Handler      ;47:PORTB
-__Vectors_End
-__Vectors_Size  EQU     __Vectors_End - __Vectors
-            ALIGN
-;****************************************************************
-;Constants
-            AREA    MyConst,DATA,READONLY
-;>>>>> begin constants here <<<<<
-;>>>>>   end constants here <<<<<
-            ALIGN
-;****************************************************************
-;Variables
-            AREA    MyData,DATA,READWRITE
-;>>>>> begin variables here <<<<<
-;>>>>>   end variables here <<<<<
             ALIGN
             END
